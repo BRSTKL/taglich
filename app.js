@@ -36,6 +36,154 @@
 
     let state = loadState();
 
+    // === PRONUNCIATION ===
+    const speechSupported = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
+    const speechSynth = speechSupported ? window.speechSynthesis : null;
+    let availableVoices = [];
+    let selectedVoice = null;
+    let usingVoiceFallback = false;
+    let currentUtterance = null;
+    let currentLearnPhrase = null;
+    let pronunciationError = '';
+
+    function pickPronunciationVoice(voices) {
+        const usableVoices = voices.filter(Boolean);
+        const exactGerman = usableVoices.find(voice => (voice.lang || '').toLowerCase() === 'de-de');
+        if (exactGerman) return { voice: exactGerman, fallback: false };
+
+        const genericGerman = usableVoices.find(voice => (voice.lang || '').toLowerCase().startsWith('de'));
+        if (genericGerman) return { voice: genericGerman, fallback: false };
+
+        if (usableVoices.length > 0) {
+            return { voice: usableVoices[0], fallback: true };
+        }
+
+        return { voice: null, fallback: false };
+    }
+
+    function updatePronunciationUI() {
+        const button = document.getElementById('btn-pronounce');
+        const buttonLabel = document.getElementById('btn-pronounce-label');
+        const note = document.getElementById('pronounce-note');
+
+        if (!button || !buttonLabel || !note) return;
+
+        const isPlaying = !!currentUtterance;
+        const hasPhrase = !!currentLearnPhrase;
+        const hasVoice = !!selectedVoice;
+
+        button.disabled = !hasPhrase || !speechSupported || !hasVoice;
+        button.classList.toggle('is-playing', isPlaying);
+        buttonLabel.textContent = isPlaying ? 'Çalıyor...' : 'Dinle';
+        button.setAttribute('aria-label', isPlaying ? 'Almanca telaffuz okunuyor' : 'Almanca telaffuzu dinle');
+
+        let noteText = '';
+        if (pronunciationError) {
+            noteText = pronunciationError;
+        } else if (!speechSupported) {
+            noteText = 'Tarayıcın sesli telaffuzu desteklemiyor.';
+        } else if (!availableVoices.length) {
+            noteText = 'Sesler hazırlanıyor...';
+        } else if (!selectedVoice) {
+            noteText = 'Bu cihazda uygun ses bulunamadı.';
+        } else if (usingVoiceFallback) {
+            noteText = 'Almanca ses bulunamadı, cihazın varsayılan sesi kullanılacak.';
+        }
+
+        note.textContent = noteText;
+        note.classList.toggle('hidden', !noteText);
+    }
+
+    function refreshPronunciationVoices() {
+        if (!speechSupported) {
+            updatePronunciationUI();
+            return;
+        }
+
+        availableVoices = speechSynth.getVoices();
+        const voiceSelection = pickPronunciationVoice(availableVoices);
+        selectedVoice = voiceSelection.voice;
+        usingVoiceFallback = voiceSelection.fallback;
+        updatePronunciationUI();
+    }
+
+    function stopPronunciation() {
+        pronunciationError = '';
+
+        if (!speechSupported) {
+            updatePronunciationUI();
+            return;
+        }
+
+        currentUtterance = null;
+        speechSynth.cancel();
+        updatePronunciationUI();
+    }
+
+    function speakCurrentPhrase() {
+        if (!speechSupported || !currentLearnPhrase || !selectedVoice) {
+            updatePronunciationUI();
+            return;
+        }
+
+        pronunciationError = '';
+        stopPronunciation();
+
+        const utterance = new SpeechSynthesisUtterance(currentLearnPhrase.german);
+        utterance.voice = selectedVoice;
+        utterance.lang = selectedVoice.lang || 'de-DE';
+        utterance.rate = 0.95;
+        utterance.pitch = 1;
+        currentUtterance = utterance;
+        updatePronunciationUI();
+
+        utterance.onstart = function() {
+            updatePronunciationUI();
+        };
+
+        utterance.onend = function() {
+            if (currentUtterance !== utterance) return;
+            currentUtterance = null;
+            updatePronunciationUI();
+        };
+
+        utterance.onerror = function() {
+            if (currentUtterance !== utterance) return;
+            currentUtterance = null;
+            pronunciationError = 'Ses oynatılamadı. Tekrar dene.';
+            updatePronunciationUI();
+        };
+
+        try {
+            speechSynth.speak(utterance);
+        } catch (error) {
+            currentUtterance = null;
+            pronunciationError = 'Ses oynatılamadı. Tekrar dene.';
+            updatePronunciationUI();
+        }
+    }
+
+    function initPronunciation() {
+        updatePronunciationUI();
+
+        if (!speechSupported) return;
+
+        refreshPronunciationVoices();
+        setTimeout(refreshPronunciationVoices, 250);
+
+        if (typeof speechSynth.addEventListener === 'function') {
+            speechSynth.addEventListener('voiceschanged', refreshPronunciationVoices);
+        } else {
+            speechSynth.onvoiceschanged = refreshPronunciationVoices;
+        }
+
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                stopPronunciation();
+            }
+        });
+    }
+
     // === DATE HELPERS ===
     function today() {
         return new Date().toISOString().split('T')[0];
@@ -81,6 +229,11 @@
 
     // === SCREEN NAVIGATION ===
     function showScreen(id) {
+        if (id !== 'lesson') {
+            currentLearnPhrase = null;
+            stopPronunciation();
+        }
+
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
         document.getElementById(id + '-screen').classList.add('active');
 
@@ -161,6 +314,8 @@
             return;
         }
 
+        stopPronunciation();
+
         const phrase = lessonPhrases[lessonIndex];
         const isLearnMode = lessonIndex < 2; // First 2: learn, rest: test
 
@@ -181,6 +336,8 @@
         const testContainer = document.getElementById('test-container');
         container.classList.remove('hidden');
         testContainer.classList.add('hidden');
+        currentLearnPhrase = phrase;
+        pronunciationError = '';
 
         // Reset card
         document.getElementById('card-mode-badge').textContent = 'Öğren';
@@ -190,6 +347,7 @@
         document.getElementById('card-turkish').textContent = phrase.turkish;
         document.getElementById('card-example').textContent = phrase.example;
         document.getElementById('card-example-tr').textContent = phrase.exampleTr;
+        updatePronunciationUI();
 
         document.getElementById('card-back').classList.add('hidden');
         document.getElementById('btn-reveal').classList.remove('hidden');
@@ -207,6 +365,9 @@
         const testContainer = document.getElementById('test-container');
         container.classList.add('hidden');
         testContainer.classList.remove('hidden');
+        currentLearnPhrase = phrase;
+        pronunciationError = '';
+        updatePronunciationUI();
 
         // Generate options (1 correct + 2 random wrong)
         const wrongPhrases = PHRASES_DB.filter(p => p.id !== phrase.id);
@@ -446,6 +607,11 @@
         // Reveal answer
         document.getElementById('btn-reveal').addEventListener('click', handleReveal);
 
+        // Pronunciation
+        document.getElementById('btn-pronounce').addEventListener('click', function() {
+            if (!this.disabled) speakCurrentPhrase();
+        });
+
         // Difficulty buttons
         document.querySelectorAll('.btn-difficulty').forEach(btn => {
             btn.addEventListener('click', function() {
@@ -462,6 +628,7 @@
     // === SPLASH & INIT ===
     function init() {
         initEvents();
+        initPronunciation();
 
         // Show splash for 3 seconds
         setTimeout(() => {

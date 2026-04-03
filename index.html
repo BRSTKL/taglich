@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Täglich — Almanca Öğren</title>
+    <meta name="description" content="Bilimsel temelli günlük Almanca kalıp cümle öğrenme uygulaması">
+    <meta name="theme-color" content="#0a0a0f">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Splash Screen -->
+        <div id="splash-screen" class="screen active">
+            <div class="splash-content">
+                <div class="splash-logo">
+                    <span class="logo-letter">T</span>
+                    <span class="logo-umlaut">ä</span>
+                    <span class="logo-letter">g</span>
+                    <span class="logo-letter">l</span>
+                    <span class="logo-letter">i</span>
+                    <span class="logo-letter">c</span>
+                    <span class="logo-letter">h</span>
+                </div>
+                <p class="splash-tagline">Her gün 5 yeni kalıp. Bilimsel yöntemlerle.</p>
+                <div class="splash-loader">
+                    <div class="loader-bar"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Home Screen -->
+        <div id="home-screen" class="screen">
+            <header class="home-header">
+                <div class="header-top">
+                    <h1 class="app-title">Täglich</h1>
+                    <div class="streak-badge" id="streak-badge">
+                        <span class="streak-fire">🔥</span>
+                        <span class="streak-count" id="streak-count">0</span>
+                    </div>
+                </div>
+                <p class="home-date" id="home-date"></p>
+            </header>
+
+            <div class="home-body">
+                <!-- Daily Card -->
+                <div class="daily-card" id="daily-card">
+                    <div class="daily-card-top">
+                        <span class="daily-label">Günün Dersi</span>
+                        <span class="daily-day" id="daily-day">Gün 1</span>
+                    </div>
+                    <div class="daily-card-phrases" id="daily-preview"></div>
+                    <button class="btn-start" id="btn-start">
+                        <span>Derse Başla</span>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                    </button>
+                </div>
+
+                <!-- Stats Row -->
+                <div class="stats-row">
+                    <div class="stat-card">
+                        <span class="stat-value" id="stat-learned">0</span>
+                        <span class="stat-label">Öğrenilen</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value" id="stat-mastered">0</span>
+                        <span class="stat-label">Ustalaşılan</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-value" id="stat-review">0</span>
+                        <span class="stat-label">Tekrar Bekleyen</span>
+                    </div>
+                </div>
+
+                <!-- Method Info -->
+                <div class="method-section">
+                    <h3 class="method-title">Nasıl Çalışıyor?</h3>
+                    <div class="method-cards">
+                        <div class="method-card">
+                            <div class="method-icon">🧠</div>
+                            <h4>Aralıklı Tekrar</h4>
+                            <p>Zorlandığın kalıplar daha sık, kolaylar daha seyrek tekrar edilir.</p>
+                        </div>
+                        <div class="method-card">
+                            <div class="method-icon">💡</div>
+                            <h4>Aktif Hatırlama</h4>
+                            <p>İlk 2 kart öğretir, sonrakiler seni test eder — bu yöntem hafızayı 2x güçlendirir.</p>
+                        </div>
+                        <div class="method-card">
+                            <div class="method-icon">📅</div>
+                            <h4>Günlük Ritim</h4>
+                            <p>Her sabah 09:00'da 5 yeni kalıp açılır. Düzenli pratik = kalıcı öğrenme.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bottom Nav -->
+            <nav class="bottom-nav">
+                <button class="nav-btn active" data-screen="home">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                    <span>Ana Sayfa</span>
+                </button>
+                <button class="nav-btn" data-screen="progress">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                    <span>İlerleme</span>
+                </button>
+                <button class="nav-btn" data-screen="review">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 4v16"/></svg>
+                    <span>Tekrar</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- Lesson Screen -->
+        <div id="lesson-screen" class="screen">
+            <header class="lesson-header">
+                <button class="btn-back" id="btn-back">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
+                </button>
+                <div class="lesson-progress-bar">
+                    <div class="lesson-progress-fill" id="lesson-progress-fill"></div>
+                </div>
+                <span class="lesson-counter" id="lesson-counter">1/5</span>
+            </header>
+
+            <div class="lesson-body">
+                <!-- Learn Mode -->
+                <div class="card-container" id="card-container">
+                    <div class="phrase-card" id="phrase-card">
+                        <div class="card-mode-badge" id="card-mode-badge">Öğren</div>
+                        <div class="card-front" id="card-front">
+                            <p class="card-german" id="card-german"></p>
+                            <p class="card-pronunciation" id="card-pronunciation"></p>
+                        </div>
+                        <div class="card-back hidden" id="card-back">
+                            <p class="card-turkish" id="card-turkish"></p>
+                            <p class="card-example" id="card-example"></p>
+                            <p class="card-example-tr" id="card-example-tr"></p>
+                        </div>
+                        <button class="btn-reveal" id="btn-reveal">Anlamını Göster</button>
+                        <div class="card-actions hidden" id="card-actions">
+                            <button class="btn-difficulty btn-hard" data-difficulty="hard">Zor 😤</button>
+                            <button class="btn-difficulty btn-okay" data-difficulty="okay">Tamam 🤔</button>
+                            <button class="btn-difficulty btn-easy" data-difficulty="easy">Kolay 😎</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Test Mode -->
+                <div class="test-container hidden" id="test-container">
+                    <div class="test-card">
+                        <div class="card-mode-badge test-badge">Test</div>
+                        <p class="test-question" id="test-question"></p>
+                        <div class="test-options" id="test-options"></div>
+                        <div class="test-feedback hidden" id="test-feedback"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lesson Complete Screen -->
+        <div id="complete-screen" class="screen">
+            <div class="complete-content">
+                <div class="complete-emoji">🎉</div>
+                <h2 class="complete-title">Günlük Ders Tamamlandı!</h2>
+                <div class="complete-stats">
+                    <div class="complete-stat">
+                        <span class="complete-stat-value" id="complete-correct">0</span>
+                        <span class="complete-stat-label">Doğru</span>
+                    </div>
+                    <div class="complete-stat">
+                        <span class="complete-stat-value" id="complete-total">5</span>
+                        <span class="complete-stat-label">Toplam</span>
+                    </div>
+                </div>
+                <p class="complete-message" id="complete-message"></p>
+                <button class="btn-start" id="btn-home">
+                    <span>Ana Sayfaya Dön</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Progress Screen -->
+        <div id="progress-screen" class="screen">
+            <header class="page-header">
+                <h2>İlerleme</h2>
+            </header>
+            <div class="progress-body">
+                <div class="progress-overview">
+                    <div class="progress-ring-container">
+                        <svg class="progress-ring" viewBox="0 0 120 120">
+                            <circle class="ring-bg" cx="60" cy="60" r="52"/>
+                            <circle class="ring-fill" id="ring-fill" cx="60" cy="60" r="52"/>
+                        </svg>
+                        <div class="ring-text">
+                            <span class="ring-percent" id="ring-percent">0%</span>
+                            <span class="ring-label">Tamamlandı</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="calendar-section">
+                    <h3>Tamamlanan Günler</h3>
+                    <div class="day-grid" id="day-grid"></div>
+                </div>
+            </div>
+            <nav class="bottom-nav">
+                <button class="nav-btn" data-screen="home">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                    <span>Ana Sayfa</span>
+                </button>
+                <button class="nav-btn active" data-screen="progress">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                    <span>İlerleme</span>
+                </button>
+                <button class="nav-btn" data-screen="review">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 4v16"/></svg>
+                    <span>Tekrar</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- Review Screen -->
+        <div id="review-screen" class="screen">
+            <header class="page-header">
+                <h2>Tekrar</h2>
+            </header>
+            <div class="review-body">
+                <div class="review-empty" id="review-empty">
+                    <div class="review-empty-icon">✨</div>
+                    <p>Tekrar bekleyen kalıp yok!</p>
+                    <p class="review-sub">Yarın tekrar kontrol et.</p>
+                </div>
+                <div class="review-list" id="review-list"></div>
+            </div>
+            <nav class="bottom-nav">
+                <button class="nav-btn" data-screen="home">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                    <span>Ana Sayfa</span>
+                </button>
+                <button class="nav-btn" data-screen="progress">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                    <span>İlerleme</span>
+                </button>
+                <button class="nav-btn active" data-screen="review">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 4v16"/></svg>
+                    <span>Tekrar</span>
+                </button>
+            </nav>
+        </div>
+    </div>
+
+    <script src="phrases.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

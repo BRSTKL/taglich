@@ -1,4 +1,4 @@
-const CACHE_NAME = 'taglich-v1';
+const CACHE_NAME = 'taglich-v2';
 const ASSETS = [
     '/',
     '/index.html',
@@ -26,10 +26,29 @@ self.addEventListener('activate', event => {
     self.clients.claim();
 });
 
-// Fetch — cache first, fallback to network
+// Fetch — network first for same-origin GET requests, fallback to cache
 self.addEventListener('fetch', event => {
+    if (event.request.method !== 'GET') return;
+
+    const url = new URL(event.request.url);
+    if (url.origin !== self.location.origin) return;
+
     event.respondWith(
-        caches.match(event.request).then(cached => cached || fetch(event.request))
+        fetch(event.request)
+            .then(response => {
+                const responseClone = response.clone();
+                caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));
+                return response;
+            })
+            .catch(() =>
+                caches.match(event.request).then(cached => {
+                    if (cached) return cached;
+                    if (event.request.mode === 'navigate') {
+                        return caches.match('/index.html');
+                    }
+                    throw new Error('Resource not available in cache');
+                })
+            )
     );
 });
 

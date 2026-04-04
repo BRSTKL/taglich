@@ -8,6 +8,18 @@
 
     // === STATE ===
     const STATE_KEY = 'taglich_state';
+    let stateWasMigrated = false;
+
+    function getDefaultPhraseState() {
+        return {
+            level: 'new',
+            nextReview: today(),
+            attempts: 0,
+            easeFactor: 2.5,
+            interval: 1,
+            repetitions: 0
+        };
+    }
 
     function getDefaultState() {
         return {
@@ -16,16 +28,64 @@
             streak: 0,
             lastCompletedDate: null,
             startDate: new Date().toISOString().split('T')[0],
-            phrases: {}, // { id: { level: 'new'|'learning'|'mastered', nextReview: 'YYYY-MM-DD', attempts: 0 } }
+            phrases: {}, // { id: { level: 'new'|'learning'|'mastered', nextReview: 'YYYY-MM-DD', attempts: 0, easeFactor: 2.5, interval: 1, repetitions: 0 } }
             totalCorrect: 0,
             totalAttempts: 0
+        };
+    }
+
+    function normalizePhraseState(phraseState) {
+        const defaults = getDefaultPhraseState();
+        const source = phraseState && typeof phraseState === 'object' ? phraseState : {};
+
+        return {
+            ...source,
+            level: typeof source.level === 'string' ? source.level : defaults.level,
+            nextReview: typeof source.nextReview === 'string' ? source.nextReview : defaults.nextReview,
+            attempts: Math.max(0, Math.floor(Number.isFinite(source.attempts) ? source.attempts : defaults.attempts)),
+            easeFactor: Math.max(1.3, Number.isFinite(source.easeFactor) ? source.easeFactor : defaults.easeFactor),
+            interval: Math.max(1, Math.round(Number.isFinite(source.interval) ? source.interval : defaults.interval)),
+            repetitions: Math.max(0, Math.floor(Number.isFinite(source.repetitions) ? source.repetitions : defaults.repetitions))
+        };
+    }
+
+    function didPhraseStateChange(original, normalized) {
+        if (!original || typeof original !== 'object') return true;
+
+        return ['level', 'nextReview', 'attempts', 'easeFactor', 'interval', 'repetitions']
+            .some(key => original[key] !== normalized[key]);
+    }
+
+    function normalizeState(savedState) {
+        const defaults = getDefaultState();
+        const source = savedState && typeof savedState === 'object' ? savedState : {};
+        const rawPhrases = source.phrases && typeof source.phrases === 'object' ? source.phrases : {};
+        const normalizedPhrases = {};
+
+        if (rawPhrases !== source.phrases) {
+            stateWasMigrated = true;
+        }
+
+        for (const [phraseId, phraseState] of Object.entries(rawPhrases)) {
+            const normalizedPhrase = normalizePhraseState(phraseState);
+            normalizedPhrases[phraseId] = normalizedPhrase;
+
+            if (didPhraseStateChange(phraseState, normalizedPhrase)) {
+                stateWasMigrated = true;
+            }
+        }
+
+        return {
+            ...defaults,
+            ...source,
+            phrases: normalizedPhrases
         };
     }
 
     function loadState() {
         try {
             const saved = localStorage.getItem(STATE_KEY);
-            if (saved) return JSON.parse(saved);
+            if (saved) return normalizeState(JSON.parse(saved));
         } catch(e) {}
         return getDefaultState();
     }
@@ -35,6 +95,7 @@
     }
 
     let state = loadState();
+    if (stateWasMigrated) saveState();
 
     // === PRONUNCIATION ===
     const speechSupported = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
@@ -286,7 +347,7 @@
         // Stats
         const learned = Object.keys(state.phrases).length;
         const mastered = Object.values(state.phrases).filter(p => p.level === 'mastered').length;
-        const review = Object.values(state.phrases).filter(p => p.nextReview <= today() && p.level !== 'mastered').length;
+        const review = Object.values(state.phrases).filter(p => p.nextReview <= today()).length;
 
         document.getElementById('stat-learned').textContent = learned;
         document.getElementById('stat-mastered').textContent = mastered;
@@ -457,32 +518,44 @@
 
     // === SPACED REPETITION ===
     function updatePhraseState(phraseId, difficulty) {
-        if (!state.phrases[phraseId]) {
-            state.phrases[phraseId] = { level: 'new', nextReview: today(), attempts: 0 };
-        }
+        const qualityMap = {
+            hard: 1,
+            okay: 3,
+            easy: 5
+        };
+        const quality = qualityMap[difficulty];
 
+        if (!Number.isFinite(quality)) return;
+
+        state.phrases[phraseId] = normalizePhraseState(state.phrases[phraseId]);
         const p = state.phrases[phraseId];
+        const previousInterval = p.interval;
+        const previousEaseFactor = p.easeFactor;
+        const previousRepetitions = p.repetitions;
+
         p.attempts++;
 
-        switch(difficulty) {
-            case 'hard':
-                p.level = 'learning';
-                p.nextReview = addDays(today(), 1); // Tomorrow
-                break;
-            case 'okay':
-                p.level = 'learning';
-                p.nextReview = addDays(today(), 3); // 3 days
-                break;
-            case 'easy':
-                if (p.attempts >= 3) {
-                    p.level = 'mastered';
-                    p.nextReview = addDays(today(), 14); // 2 weeks
-                } else {
-                    p.level = 'learning';
-                    p.nextReview = addDays(today(), 7); // 1 week
-                }
-                break;
+        if (quality < 3) {
+            p.repetitions = 0;
+            p.interval = 1;
+        } else {
+            if (previousRepetitions === 0) {
+                p.interval = 1;
+            } else if (previousRepetitions === 1) {
+                p.interval = 6;
+            } else {
+                p.interval = Math.max(1, Math.round(previousInterval * previousEaseFactor));
+            }
+
+            p.easeFactor = Math.max(
+                1.3,
+                previousEaseFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
+            );
+            p.repetitions++;
         }
+
+        p.level = p.repetitions === 0 ? 'new' : p.repetitions < 3 ? 'learning' : 'mastered';
+        p.nextReview = addDays(today(), p.interval);
 
         saveState();
     }
@@ -554,7 +627,7 @@
         const reviewPhrases = [];
 
         for (const [id, data] of Object.entries(state.phrases)) {
-            if (data.nextReview <= t && data.level !== 'mastered') {
+            if (data.nextReview <= t) {
                 const phrase = PHRASES_DB.find(p => p.id == id);
                 if (phrase) reviewPhrases.push({ ...phrase, ...data });
             }

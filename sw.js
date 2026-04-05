@@ -33,8 +33,11 @@ self.addEventListener('fetch', event => {
     const url = new URL(event.request.url);
     if (url.origin !== self.location.origin) return;
 
+    // Always fetch fresh from network (no-cache), fallback to SW cache offline
+    const freshRequest = new Request(event.request, { cache: 'no-cache' });
+
     event.respondWith(
-        fetch(event.request)
+        fetch(freshRequest)
             .then(response => {
                 const responseClone = response.clone();
                 caches.open(CACHE_NAME).then(cache => cache.put(event.request, responseClone));

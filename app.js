@@ -251,7 +251,7 @@
     }
 
     function speakWithSpeechSynthesis() {
-        if (!speechSupported || !currentLearnPhrase || !selectedVoice) {
+        if (!speechSupported || !currentLearnPhrase) {
             updatePronunciationUI();
             return false;
         }
@@ -259,8 +259,8 @@
         pronunciationError = '';
 
         const utterance = new SpeechSynthesisUtterance(currentLearnPhrase.german);
-        utterance.voice = selectedVoice;
-        utterance.lang = selectedVoice.lang || 'de-DE';
+        utterance.lang = 'de-DE'; // Tarayıcı en uygun Almanca sesi seçer
+        if (selectedVoice) utterance.voice = selectedVoice;
         utterance.rate = 0.95;
         utterance.pitch = 1;
         currentUtterance = utterance;
@@ -304,21 +304,21 @@
         pronunciationError = '';
         stopPronunciation();
 
-        // 1. Google TTS — hızlı, yüksek kalite (Google Neural)
+        // 1. Google TTS dene (daha iyi kalite, neural ses)
         try {
             await speakWithGoogleTTS(currentLearnPhrase.german);
             return;
         } catch (_) {
-            // Google TTS erişilemezse Web Speech'e geç
+            // Bloke veya hata → Web Speech'e geç
         }
 
-        // 2. Web Speech API yedek
-        if (speechSupported && selectedVoice) {
+        // 2. Web Speech API — her modern tarayıcıda çalışır
+        if (speechSupported) {
             speakWithSpeechSynthesis();
             return;
         }
 
-        pronunciationError = 'Ses oynatılamadı. İnternet bağlantını kontrol et.';
+        pronunciationError = 'Tarayıcın sesi desteklemiyor.';
         updatePronunciationUI();
     }
 
@@ -364,7 +364,7 @@
                 reject(err);
             });
 
-            // 6 saniyede ses başlamazsa yedek devreye girsin
+            // 2 saniyede başlamazsa Web Speech'e geç
             setTimeout(function() {
                 if (googleTtsPlaying && currentAudio === audio) {
                     audio.onerror = null;
@@ -374,7 +374,7 @@
                     updatePronunciationUI();
                     reject(new Error('timeout'));
                 }
-            }, 6000);
+            }, 2000);
         });
     }
 

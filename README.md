@@ -66,6 +66,23 @@ Settings → Pages → Source: main branch → Save
 - LocalStorage (veri saklama)
 - Google Fonts (DM Serif Display + DM Sans)
 
+## de-DE TTS
+
+- Telaffuz artik once tarayici icinde calisan Piper TTS ile uretilir.
+- Varsayilan model: `de_DE-thorsten-high`
+- Ilk `Dinle` tiklamasinda model Hugging Face uzerinden indirilir ve tarayici cache'ine kaydedilir (yaklasik 114 MB).
+- Sonraki oynatmalar ayni tarayicida yerel cache'den calisir.
+- Piper kullanilamazsa uygulama son care olarak Web Speech API fallback'ine doner.
+
+### TTS runtime guncelleme
+
+```bash
+npm install
+npm run vendor:tts
+```
+
+Bu komut, `piper-tts-web` ve `onnxruntime-web` runtime dosyalarini `tts/runtime/` altina kopyalar.
+
 ## Dosya Yapısı
 
 ```

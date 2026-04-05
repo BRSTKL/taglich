@@ -1,0 +1,11 @@
+{
+  "name": "taglich",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "vendor:tts": "powershell -ExecutionPolicy Bypass -File scripts/vendor-tts-runtime.ps1"
+  },
+  "dependencies": {
+    "piper-tts-web": "^1.1.2"
+  }
+}

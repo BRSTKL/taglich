@@ -30,7 +30,15 @@
             startDate: new Date().toISOString().split('T')[0],
             phrases: {}, // { id: { level: 'new'|'learning'|'mastered', nextReview: 'YYYY-MM-DD', attempts: 0, easeFactor: 2.5, interval: 1, repetitions: 0 } }
             totalCorrect: 0,
-            totalAttempts: 0
+            totalAttempts: 0,
+            cloze: {
+                totalSessions: 0,
+                totalCorrect: 0,
+                totalAnswered: 0,
+                todaySessions: 0,
+                lastPlayedDate: null,
+                recentResults: []
+            }
         };
     }
 
@@ -100,12 +108,17 @@
     // === PRONUNCIATION ===
     const speechSupported = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
     const speechSynth = speechSupported ? window.speechSynthesis : null;
+    const localPronunciationSupported = 'Worker' in window && 'Audio' in window && 'fetch' in window && 'Blob' in window;
     let availableVoices = [];
     let selectedVoice = null;
     let usingVoiceFallback = false;
     let currentUtterance = null;
     let currentLearnPhrase = null;
     let pronunciationError = '';
+    let piperTtsController = null;
+    let piperTtsModulePromise = null;
+    let piperTtsDisabled = false;
+    let piperTtsState = { status: 'idle', message: '' };
 
     function pickPronunciationVoice(voices) {
         const usableVoices = voices.filter(Boolean);
@@ -122,6 +135,45 @@
         return { voice: null, fallback: false };
     }
 
+    function setPiperTtsState(status, message) {
+        piperTtsState = {
+            status: status || 'idle',
+            message: message || ''
+        };
+        updatePronunciationUI();
+    }
+
+    async function getPiperTtsController() {
+        if (!localPronunciationSupported || piperTtsDisabled) return null;
+
+        if (piperTtsController) {
+            return piperTtsController;
+        }
+
+        if (!piperTtsModulePromise) {
+            piperTtsModulePromise = import('./tts/piper-engine.mjs');
+        }
+
+        try {
+            const piperModule = await piperTtsModulePromise;
+            if (!piperModule.supportsLocalPiperTts()) {
+                piperTtsDisabled = true;
+                return null;
+            }
+
+            piperTtsController = new piperModule.PiperTtsController({
+                onStateChange: function(nextState) {
+                    setPiperTtsState(nextState.status, nextState.message);
+                }
+            });
+            return piperTtsController;
+        } catch (error) {
+            piperTtsDisabled = true;
+            throw error;
+        }
+
+    }
+
     function updatePronunciationUI() {
         const button = document.getElementById('btn-pronounce');
         const buttonLabel = document.getElementById('btn-pronounce-label');
@@ -129,11 +181,15 @@
 
         if (!button || !buttonLabel || !note) return;
 
-        const isPlaying = !!currentUtterance;
+        const localActive = localPronunciationSupported && !piperTtsDisabled;
+        const localBusy = piperTtsState.status === 'loading-runtime' || piperTtsState.status === 'downloading-model';
+        const localSpeaking = piperTtsState.status === 'speaking';
+        const fallbackAvailable = speechSupported && !!selectedVoice;
+        const isPlaying = localSpeaking || !!currentUtterance;
         const hasPhrase = !!currentLearnPhrase;
-        const hasVoice = !!selectedVoice;
+        const canPlay = localActive || fallbackAvailable;
 
-        button.disabled = !hasPhrase || !speechSupported || !hasVoice;
+        button.disabled = !hasPhrase || !canPlay || localBusy;
         button.classList.toggle('is-playing', isPlaying);
         buttonLabel.textContent = isPlaying ? 'Çalıyor...' : 'Dinle';
         button.setAttribute('aria-label', isPlaying ? 'Almanca telaffuz okunuyor' : 'Almanca telaffuzu dinle');
@@ -141,6 +197,10 @@
         let noteText = '';
         if (pronunciationError) {
             noteText = pronunciationError;
+        } else if (piperTtsState.message) {
+            noteText = piperTtsState.message;
+        } else if (localActive) {
+            noteText = '';
         } else if (!speechSupported) {
             noteText = 'Tarayıcın sesli telaffuzu desteklemiyor.';
         } else if (!availableVoices.length) {
@@ -171,6 +231,11 @@
     function stopPronunciation() {
         pronunciationError = '';
 
+        setPiperTtsState(piperTtsController ? 'ready' : 'idle');
+        if (piperTtsController) {
+            piperTtsController.stop();
+        }
+
         if (!speechSupported) {
             updatePronunciationUI();
             return;
@@ -181,14 +246,13 @@
         updatePronunciationUI();
     }
 
-    function speakCurrentPhrase() {
+    function speakWithSpeechSynthesis() {
         if (!speechSupported || !currentLearnPhrase || !selectedVoice) {
             updatePronunciationUI();
-            return;
+            return false;
         }
 
         pronunciationError = '';
-        stopPronunciation();
 
         const utterance = new SpeechSynthesisUtterance(currentLearnPhrase.german);
         utterance.voice = selectedVoice;
@@ -221,21 +285,62 @@
             currentUtterance = null;
             pronunciationError = 'Ses oynatılamadı. Tekrar dene.';
             updatePronunciationUI();
+            return false;
         }
+
+        return true;
+    }
+
+    async function speakCurrentPhrase() {
+        if (!currentLearnPhrase) {
+            updatePronunciationUI();
+            return;
+        }
+
+        pronunciationError = '';
+        stopPronunciation();
+
+        if (localPronunciationSupported && !piperTtsDisabled) {
+            try {
+                const controller = await getPiperTtsController();
+                if (controller) {
+                    await controller.speak(currentLearnPhrase.german);
+                    return;
+                }
+            } catch (error) {
+                if (speechSupported && selectedVoice) {
+                    setPiperTtsState('fallback', 'Yuksek kaliteli ses kullanilamadi, cihaz sesi kullanilacak.');
+                    speakWithSpeechSynthesis();
+                    return;
+                }
+
+                pronunciationError = 'Yuksek kaliteli ses oynatilamadi. Tekrar dene.';
+                updatePronunciationUI();
+                return;
+            }
+        }
+
+        if (speechSupported && selectedVoice) {
+            speakWithSpeechSynthesis();
+            return;
+        }
+
+        pronunciationError = 'Bu cihazda uygun bir ses motoru bulunamadi.';
+        updatePronunciationUI();
     }
 
     function initPronunciation() {
         updatePronunciationUI();
 
-        if (!speechSupported) return;
+        if (speechSupported) {
+            refreshPronunciationVoices();
+            setTimeout(refreshPronunciationVoices, 250);
 
-        refreshPronunciationVoices();
-        setTimeout(refreshPronunciationVoices, 250);
-
-        if (typeof speechSynth.addEventListener === 'function') {
-            speechSynth.addEventListener('voiceschanged', refreshPronunciationVoices);
-        } else {
-            speechSynth.onvoiceschanged = refreshPronunciationVoices;
+            if (typeof speechSynth.addEventListener === 'function') {
+                speechSynth.addEventListener('voiceschanged', refreshPronunciationVoices);
+            } else {
+                speechSynth.onvoiceschanged = refreshPronunciationVoices;
+            }
         }
 
         document.addEventListener('visibilitychange', function() {
@@ -307,6 +412,12 @@
         if (id === 'home') renderHome();
         if (id === 'progress') renderProgress();
         if (id === 'review') renderReview();
+        if (id === 'kloz') renderPuzzleScreen();
+
+        // Reset active cloze session when navigating away
+        if (id !== 'kloz' && clozeSession.active) {
+            clozeSession = { active: false, cards: [], currentIndex: 0, results: [], answered: false };
+        }
     }
 
     // === HOME SCREEN ===
@@ -655,6 +766,436 @@
                 `;
             }).join('');
         }
+    }
+
+    // === KLOZ PUZZLE ===
+
+    // Özel isimler — kişi adları, ülkeler, şehirler, kurumlar
+    const CLOZE_PROPER_NOUNS = new Set([
+        // Kişi adları
+        'Anna','Müller','Schmidt','Fischer','Weber','Meyer','Wagner','Becker','Hoffmann',
+        'Schulz','Koch','Richter','Klein','Wolf','Schröder','Neumann','Schwarz','Zimmermann',
+        'Braun','Krüger','Hartmann','Lange','Schmitt','Werner','Schmitz','Krause','Meier',
+        'Lehmann','Schmid','Schulze','Maier','Köhler','Herrmann','König','Walter','Mayer',
+        'Hans','Peter','Klaus','Maria','Thomas','Michael','Andreas','Stefan','Frank','Markus',
+        'Christian','Daniel','Martin','Julia','Laura','Sarah','Lisa','Sandra','Petra',
+        'Frau','Herr',
+        // Ülkeler
+        'Türkei','Deutschland','Frankreich','England','Amerika','Österreich','Schweiz',
+        'Italien','Spanien','China','Japan','Russland','Polen','Niederlande','Belgien',
+        'Schweden','Norwegen','Dänemark','Finnland','Portugal','Griechenland','Ungarn',
+        'Tschechien','Rumänien','Bulgarien','Kroatien','Serbien','Slowakei','Slowenien',
+        'USA','UK','EU',
+        // Şehirler
+        'Berlin','München','Hamburg','Frankfurt','Köln','Stuttgart','Düsseldorf','Dortmund',
+        'Essen','Bremen','Dresden','Leipzig','Hannover','Nürnberg','Duisburg','Bochum',
+        'Wien','Zürich','Bern','Basel','Istanbul','Paris','London','Madrid','Rom','Amsterdam',
+        // Kurumlar ve kısaltmalar
+        'METU','ICE','WLAN',
+        // Haftanın günleri (öğrenilmesi daha az kritik)
+        'Montag','Dienstag','Mittwoch','Donnerstag','Freitag','Samstag','Sonntag'
+    ]);
+
+    const CLOZE_STOPWORDS = new Set([
+        'der','die','das','dem','den','des','ein','eine','einen','einem','einer','eines',
+        'ich','du','er','sie','es','wir','ihr','Sie','mich','mir','dich','dir','ihn','ihm','uns','euch','sich',
+        'in','auf','mit','von','zu','bei','nach','an','über','unter','vor','hinter','neben','zwischen',
+        'durch','für','gegen','ohne','um','aus','ab','beim','zum','zur','ins','am','im',
+        'und','oder','aber','denn','wenn','weil','dass','ob','damit','als','obwohl',
+        'ist','sind','war','waren','hat','haben','wird','werden','bin','bist','sein','habe',
+        'kann','muss','will','soll','mag','darf','könnte','würde','sollte',
+        'nicht','auch','noch','schon','nur','sehr','so','ja','nein','doch','mal',
+        'dann','hier','dort','jetzt','heute','morgen','immer','nie','oft','gern','gerne',
+        'Ich','Du','Er','Wir','Ihr','Mir','Mich','Uns','Sich'
+    ]);
+
+    let clozeSession = { active: false, cards: [], currentIndex: 0, results: [], answered: false };
+
+    function selectBlankWord(phrase) {
+        if (!phrase.example || phrase.example.trim().length === 0) return null;
+        const tokens = phrase.example.split(/\s+/).filter(t => t.length > 0);
+        if (tokens.length < 4) return null;
+
+        const parsed = tokens.map(function(token, idx) {
+            const clean = token.replace(/[.,!?;:'"»«]+$/, '');
+            const trail = token.slice(clean.length);
+            return { token: token, clean: clean, trail: trail, idx: idx };
+        });
+
+        // Priority 1: nouns (uppercase, length > 4, not first token, not stopword, not proper noun)
+        const nounCandidates = parsed.filter(function(p) {
+            return p.idx > 0 && p.clean.length > 4 && /^[A-ZÄÖÜ]/.test(p.clean)
+                && !CLOZE_STOPWORDS.has(p.clean) && !CLOZE_PROPER_NOUNS.has(p.clean);
+        });
+
+        // Priority 2: lowercase content words (length > 5, not stopword, not proper noun)
+        const verbCandidates = parsed.filter(function(p) {
+            return p.idx > 0 && p.clean.length > 5 && /^[a-zäöü]/.test(p.clean)
+                && !CLOZE_STOPWORDS.has(p.clean) && !CLOZE_PROPER_NOUNS.has(p.clean);
+        });
+
+        const candidates = nounCandidates.length > 0 ? nounCandidates : verbCandidates;
+        if (candidates.length === 0) return null;
+
+        // Prefer words in the middle of the sentence
+        const midCandidates = candidates.filter(function(p) { return p.idx > 1 && p.idx < tokens.length - 1; });
+        const chosen = midCandidates.length > 0 ? midCandidates[Math.floor(midCandidates.length / 2)] : candidates[0];
+
+        const parts = tokens.map(function(tok, i) {
+            return i === chosen.idx
+                ? '<span class="cloze-blank" id="cloze-blank">\u00a0\u00a0\u00a0\u00a0\u00a0\u00a0</span>' + chosen.trail
+                : tok;
+        });
+
+        return { sentenceHTML: parts.join(' '), answer: chosen.clean, trail: chosen.trail };
+    }
+
+    function generateDistractors(correctWord, phrasePool, count) {
+        count = count || 2;
+        const used = new Set([correctWord.toLowerCase()]);
+        const distractors = [];
+        const isNoun = /^[A-ZÄÖÜ]/.test(correctWord);
+
+        const allCandidates = [];
+        phrasePool.forEach(function(p) {
+            ((p.example || '') + ' ' + p.german).split(/\s+/).forEach(function(tok) {
+                const clean = tok.replace(/[.,!?;:'"»«]+$/, '');
+                if (clean.length > 3 && !CLOZE_STOPWORDS.has(clean) && !CLOZE_PROPER_NOUNS.has(clean) && !used.has(clean.toLowerCase())) {
+                    allCandidates.push(clean);
+                }
+            });
+        });
+
+        // Fisher-Yates shuffle
+        for (let i = allCandidates.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            const tmp = allCandidates[i]; allCandidates[i] = allCandidates[j]; allCandidates[j] = tmp;
+        }
+
+        // Pass 1: same grammatical category
+        allCandidates.forEach(function(w) {
+            if (distractors.length >= count) return;
+            const wIsNoun = /^[A-ZÄÖÜ]/.test(w);
+            if (wIsNoun === isNoun && !used.has(w.toLowerCase())) {
+                distractors.push(w); used.add(w.toLowerCase());
+            }
+        });
+
+        // Pass 2: fallback — any word
+        allCandidates.forEach(function(w) {
+            if (distractors.length >= count) return;
+            if (!used.has(w.toLowerCase())) {
+                distractors.push(w); used.add(w.toLowerCase());
+            }
+        });
+
+        // Pass 3: use PHRASES_DB as ultimate fallback
+        if (distractors.length < count) {
+            PHRASES_DB.forEach(function(p) {
+                if (distractors.length >= count) return;
+                p.german.split(/\s+/).forEach(function(tok) {
+                    if (distractors.length >= count) return;
+                    const clean = tok.replace(/[.,!?;:'"»«]+$/, '');
+                    if (clean.length > 3 && !CLOZE_STOPWORDS.has(clean) && !CLOZE_PROPER_NOUNS.has(clean) && !used.has(clean.toLowerCase())) {
+                        distractors.push(clean); used.add(clean.toLowerCase());
+                    }
+                });
+            });
+        }
+
+        const options = [correctWord].concat(distractors.slice(0, count));
+        for (let i = options.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            const tmp = options[i]; options[i] = options[j]; options[j] = tmp;
+        }
+        return options;
+    }
+
+    function buildLearnedPhrasePool() {
+        return PHRASES_DB.filter(function(p) {
+            const ps = state.phrases[p.id];
+            return ps && (ps.level === 'learning' || ps.level === 'mastered');
+        });
+    }
+
+    function initClozeSession() {
+        const pool = buildLearnedPhrasePool();
+        const shuffled = pool.slice();
+        for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            const tmp = shuffled[i]; shuffled[i] = shuffled[j]; shuffled[j] = tmp;
+        }
+
+        const cards = [];
+        for (let k = 0; k < shuffled.length && cards.length < 5; k++) {
+            const phrase = shuffled[k];
+            const blankData = selectBlankWord(phrase);
+            if (!blankData) continue;
+            const others = shuffled.filter(function(p) { return p.id !== phrase.id; });
+            const options = generateDistractors(blankData.answer, others, 2);
+            if (options.length < 3) continue;
+            cards.push({ phrase: phrase, blankData: blankData, options: options });
+        }
+
+        clozeSession = { active: cards.length > 0, cards: cards, currentIndex: 0, results: [], answered: false };
+        renderPuzzleScreen();
+    }
+
+    function renderPuzzleScreen() {
+        if (!clozeSession.active || clozeSession.cards.length === 0) {
+            renderClozeHub();
+            return;
+        }
+        if (clozeSession.currentIndex >= clozeSession.cards.length) {
+            renderClozeCompletion();
+            return;
+        }
+        renderClozeCard();
+    }
+
+    function renderClozeHub() {
+        const body = document.getElementById('kloz-body');
+        if (!body) return;
+        if (!state.cloze) state.cloze = getDefaultState().cloze;
+
+        const pool = buildLearnedPhrasePool();
+        const cloze = state.cloze;
+        const accuracy = cloze.totalAnswered > 0 ? Math.round((cloze.totalCorrect / cloze.totalAnswered) * 100) : 0;
+        const todayCount = cloze.lastPlayedDate === today() ? cloze.todaySessions : 0;
+        const canPlay = pool.length >= 3;
+
+        let recentHTML = '';
+        if (cloze.recentResults && cloze.recentResults.length > 0) {
+            recentHTML = '<div class="kloz-section-label">Son Oturum</div>' +
+                cloze.recentResults.map(function(r) {
+                    const ph = PHRASES_DB.find(function(p) { return p.id === r.phraseId; });
+                    if (!ph) return '';
+                    const preview = (ph.example || '').substring(0, 38);
+                    return '<div class="kloz-recent-row">' +
+                        '<span class="kloz-recent-icon">' + (r.correct ? '✅' : '❌') + '</span>' +
+                        '<div class="kloz-recent-text">' +
+                            '<div class="kloz-recent-sentence">' + preview + '…</div>' +
+                            '<div class="kloz-recent-word">' + (r.correct ? 'Cevap' : 'Doğrusu') + ': <strong>' + r.answer + '</strong></div>' +
+                        '</div></div>';
+                }).join('');
+        }
+
+        body.innerHTML =
+            '<header class="kloz-header"><h2 class="kloz-title">Bağlam Kloz</h2></header>' +
+            '<div class="kloz-hub-hero">' +
+                '<div class="kloz-hub-eyebrow">Bilimsel Yöntem</div>' +
+                '<div class="kloz-hub-title">Cümledeki eksik kelimeyi bul</div>' +
+                '<div class="kloz-hub-desc">Öğrendiğin cümlelerin bağlamına göre doğru kelimeyi seç. Tanımaktan değil, hatırlamaktan öğren.</div>' +
+                '<div class="kloz-science-pills"><span class="kloz-pill">Cloze Procedure</span><span class="kloz-pill">Generation Effect</span><span class="kloz-pill">Semantic Interference</span></div>' +
+            '</div>' +
+            '<div class="kloz-stats-grid">' +
+                '<div class="kloz-stat-box"><span class="kloz-stat-val">' + cloze.totalSessions + '</span><span class="kloz-stat-lbl">Oturum</span></div>' +
+                '<div class="kloz-stat-box"><span class="kloz-stat-val">' + (cloze.totalAnswered > 0 ? accuracy + '%' : '—') + '</span><span class="kloz-stat-lbl">Doğruluk</span></div>' +
+                '<div class="kloz-stat-box"><span class="kloz-stat-val">' + todayCount + '</span><span class="kloz-stat-lbl">Bugün</span></div>' +
+            '</div>' +
+            (canPlay
+                ? '<button class="kloz-start-btn" id="kloz-start-btn">Klozu Başlat →</button>'
+                : '<div class="kloz-empty"><div class="kloz-empty-icon">📚</div><div class="kloz-empty-title">Henüz yeterli kelime yok</div><div class="kloz-empty-desc">Puzzle için en az birkaç günlük ders tamamla. İlk derslerden sonra kloz aktif olur.</div></div>'
+            ) +
+            recentHTML;
+
+        const startBtn = document.getElementById('kloz-start-btn');
+        if (startBtn) startBtn.addEventListener('click', initClozeSession);
+    }
+
+    function renderClozeCard() {
+        const body = document.getElementById('kloz-body');
+        if (!body) return;
+        const card = clozeSession.cards[clozeSession.currentIndex];
+        const { phrase, blankData, options } = card;
+
+        const dotsHTML = clozeSession.cards.map(function(_, i) {
+            let cls = 'kloz-dot';
+            if (i < clozeSession.currentIndex) cls += ' done';
+            else if (i === clozeSession.currentIndex) cls += ' current';
+            return '<div class="' + cls + '"></div>';
+        }).join('');
+
+        const optionsHTML = options.map(function(opt) {
+            return '<button class="kloz-choice-btn" data-word="' + opt.replace(/"/g, '&quot;') + '">' + opt + '</button>';
+        }).join('');
+
+        body.innerHTML =
+            '<header class="kloz-header kloz-header-session">' +
+                '<button class="kloz-back-btn" id="kloz-back-btn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg></button>' +
+                '<div class="kloz-dots">' + dotsHTML + '</div>' +
+                '<div class="kloz-counter">' + (clozeSession.currentIndex + 1) + ' / ' + clozeSession.cards.length + '</div>' +
+            '</header>' +
+            '<div class="kloz-card-wrap">' +
+                '<div class="kloz-context-strip">' +
+                    '<span class="kloz-ctx-label">Örnek Cümle</span>' +
+                    '<span class="kloz-cat-badge">' + (phrase.category || 'günlük') + '</span>' +
+                '</div>' +
+                '<div class="kloz-sentence-card">' +
+                    '<div class="kloz-sentence-text">' + blankData.sentenceHTML + '</div>' +
+                    '<div class="kloz-tr-text">' + (phrase.exampleTr || phrase.turkish) + '</div>' +
+                '</div>' +
+                '<div class="kloz-choices-wrap">' +
+                    '<div class="kloz-choice-label">Eksik kelime hangisi?</div>' +
+                    optionsHTML +
+                '</div>' +
+                '<div class="kloz-result-area" id="kloz-result-area"></div>' +
+            '</div>';
+
+        document.getElementById('kloz-back-btn').addEventListener('click', function() {
+            if (clozeSession.results.length > 0) {
+                if (confirm('Klozdan çıkmak istiyor musun? İlerleme kaybolacak.')) {
+                    clozeSession = { active: false, cards: [], currentIndex: 0, results: [], answered: false };
+                    renderClozeHub();
+                }
+            } else {
+                clozeSession = { active: false, cards: [], currentIndex: 0, results: [], answered: false };
+                renderClozeHub();
+            }
+        });
+
+        document.querySelectorAll('.kloz-choice-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                if (!clozeSession.answered) handleClozeChoice(this.dataset.word);
+            });
+        });
+    }
+
+    function handleClozeChoice(chosenWord) {
+        clozeSession.answered = true;
+        const card = clozeSession.cards[clozeSession.currentIndex];
+        const { phrase, blankData } = card;
+        const isCorrect = chosenWord === blankData.answer;
+
+        clozeSession.results.push({ phraseId: phrase.id, correct: isCorrect, answer: blankData.answer, chosenWord: chosenWord });
+
+        // Style buttons
+        document.querySelectorAll('.kloz-choice-btn').forEach(function(btn) {
+            btn.disabled = true;
+            if (btn.dataset.word === blankData.answer) {
+                btn.classList.add('correct');
+            } else if (btn.dataset.word === chosenWord && !isCorrect) {
+                btn.classList.add('wrong');
+            } else {
+                btn.style.opacity = '0.3';
+            }
+        });
+
+        // Fill blank
+        const blankEl = document.getElementById('cloze-blank');
+        if (blankEl) {
+            blankEl.textContent = blankData.answer;
+            blankEl.classList.add(isCorrect ? 'filled-correct' : 'filled-wrong');
+        }
+
+        // Result card
+        const resultArea = document.getElementById('kloz-result-area');
+        if (isCorrect) {
+            resultArea.innerHTML =
+                '<div class="kloz-result-card kloz-result-correct">' +
+                    '<div class="kloz-result-phrase-de">"' + phrase.german + '"</div>' +
+                    '<div class="kloz-result-phrase-tr">' + phrase.turkish + '</div>' +
+                '</div>' +
+                '<button class="kloz-next-btn" id="kloz-next-btn">İleri →</button>';
+        } else {
+            resultArea.innerHTML =
+                '<div class="kloz-result-card kloz-result-wrong">' +
+                    '<div class="kloz-result-wrong-row">' +
+                        '<span class="kloz-wrong-word">' + chosenWord + '</span>' +
+                        '<span class="kloz-arrow">→</span>' +
+                        '<span class="kloz-correct-word">' + blankData.answer + '</span>' +
+                    '</div>' +
+                    '<div class="kloz-result-phrase-de">"' + phrase.german + '"</div>' +
+                    '<div class="kloz-result-phrase-tr">' + phrase.turkish + '</div>' +
+                '</div>' +
+                '<button class="kloz-next-btn" id="kloz-next-btn">İleri →</button>';
+        }
+        document.getElementById('kloz-next-btn').addEventListener('click', advanceCloze);
+
+        // Downgrade mastered phrase if answered wrong
+        if (!isCorrect && state.phrases[phrase.id] && state.phrases[phrase.id].level === 'mastered') {
+            state.phrases[phrase.id].level = 'learning';
+            state.phrases[phrase.id].nextReview = today();
+            saveState();
+        }
+    }
+
+    function advanceCloze() {
+        clozeSession.currentIndex++;
+        clozeSession.answered = false;
+        if (clozeSession.currentIndex >= clozeSession.cards.length) {
+            completeClozeSession();
+        } else {
+            renderClozeCard();
+        }
+    }
+
+    function completeClozeSession() {
+        const results = clozeSession.results;
+        const correct = results.filter(function(r) { return r.correct; }).length;
+        const total = results.length;
+
+        if (!state.cloze) state.cloze = getDefaultState().cloze;
+        state.cloze.totalSessions++;
+        state.cloze.totalCorrect += correct;
+        state.cloze.totalAnswered += total;
+
+        if (state.cloze.lastPlayedDate === today()) {
+            state.cloze.todaySessions++;
+        } else {
+            state.cloze.todaySessions = 1;
+            state.cloze.lastPlayedDate = today();
+        }
+
+        state.cloze.recentResults = results.slice(-5).map(function(r) {
+            return { phraseId: r.phraseId, correct: r.correct, answer: r.answer };
+        });
+        saveState();
+        renderClozeCompletion();
+    }
+
+    function renderClozeCompletion() {
+        const body = document.getElementById('kloz-body');
+        if (!body) return;
+        const results = clozeSession.results;
+        const correct = results.filter(function(r) { return r.correct; }).length;
+        const total = results.length;
+        const accuracy = total > 0 ? Math.round((correct / total) * 100) : 0;
+
+        let msg = '';
+        if (accuracy >= 100) msg = 'Mükemmel! Bağlam sezgin çok güçlü.';
+        else if (accuracy >= 80) msg = 'Harika! Kelime bağlantıları yerleşiyor.';
+        else if (accuracy >= 60) msg = 'İyi gidiyorsun! Zorlu kelimeleri tekrar çalış.';
+        else msg = 'Devam et! Her hata öğrenme fırsatı.';
+
+        const resultsHTML = results.map(function(r) {
+            const ph = PHRASES_DB.find(function(p) { return p.id === r.phraseId; });
+            const preview = (ph ? ph.example || '' : '').substring(0, 35);
+            return '<div class="kloz-compl-row">' +
+                '<span class="kloz-compl-icon">' + (r.correct ? '✅' : '❌') + '</span>' +
+                '<span class="kloz-compl-sentence">' + preview + '…</span>' +
+                '<span class="kloz-compl-word ' + (r.correct ? 'ok' : 'fail') + '">' + r.answer + '</span>' +
+                '</div>';
+        }).join('');
+
+        body.innerHTML =
+            '<div class="kloz-completion">' +
+                '<div class="kloz-compl-icon-big">🔍</div>' +
+                '<div class="kloz-compl-title">Kloz Tamamlandı!</div>' +
+                '<div class="kloz-compl-score">' + total + '\'ten ' + correct + ' doğru</div>' +
+                '<div class="kloz-acc-wrap">' +
+                    '<div class="kloz-acc-track"><div class="kloz-acc-fill" style="width:' + accuracy + '%"></div></div>' +
+                    '<div class="kloz-acc-label">%' + accuracy + ' doğruluk</div>' +
+                '</div>' +
+                '<div class="kloz-compl-msg">' + msg + '</div>' +
+                '<div class="kloz-compl-results">' + resultsHTML + '</div>' +
+                '<button class="kloz-start-btn" id="kloz-replay-btn">Tekrar Oyna</button>' +
+                '<button class="kloz-secondary-btn" id="kloz-home-btn">Ana Sayfaya Dön</button>' +
+            '</div>';
+
+        clozeSession = { active: false, cards: [], currentIndex: 0, results: [], answered: false };
+        document.getElementById('kloz-replay-btn').addEventListener('click', initClozeSession);
+        document.getElementById('kloz-home-btn').addEventListener('click', function() { showScreen('home'); });
     }
 
     // === EVENT LISTENERS ===

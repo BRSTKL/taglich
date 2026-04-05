@@ -1,4 +1,4 @@
-const CACHE_NAME = 'taglich-v2';
+const CACHE_NAME = 'taglich-v3';
 const ASSETS = [
     '/',
     '/index.html',

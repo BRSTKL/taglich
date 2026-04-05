@@ -328,19 +328,10 @@
                 '&q=' + encodeURIComponent(text) +
                 '&tl=de&client=tw-ob&ttsspeed=0.9';
 
-            const audio = new Audio(url);
+            const audio = new Audio();
             currentAudio = audio;
             googleTtsPlaying = true;
             updatePronunciationUI();
-
-            audio.oncanplaythrough = function() {
-                audio.play().catch(function() {
-                    currentAudio = null;
-                    googleTtsPlaying = false;
-                    updatePronunciationUI();
-                    reject(new Error('play blocked'));
-                });
-            };
 
             audio.onended = function() {
                 if (currentAudio === audio) {
@@ -360,7 +351,20 @@
                 reject(new Error('audio load error'));
             };
 
-            // Timeout: 5 saniyede yüklenmediyse Web Speech'e geç
+            // src'yi listener'lardan SONRA set et
+            audio.src = url;
+
+            // play() direkt çağır — canplaythrough beklemeye gerek yok
+            audio.play().catch(function(err) {
+                if (currentAudio === audio) {
+                    currentAudio = null;
+                    googleTtsPlaying = false;
+                    updatePronunciationUI();
+                }
+                reject(err);
+            });
+
+            // 6 saniyede ses başlamazsa yedek devreye girsin
             setTimeout(function() {
                 if (googleTtsPlaying && currentAudio === audio) {
                     audio.onerror = null;
@@ -370,7 +374,7 @@
                     updatePronunciationUI();
                     reject(new Error('timeout'));
                 }
-            }, 5000);
+            }, 6000);
         });
     }
 

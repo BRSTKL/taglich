@@ -969,6 +969,49 @@ body {
     color: var(--green);
 }
 
+/* Review Start Bar */
+.review-start-bar {
+    padding: 16px 20px 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.review-start-info {
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+/* Review Session Overlay */
+.review-session {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    z-index: 10;
+}
+
+.review-session.hidden { display: none; }
+
+.review-badge {
+    background: var(--yellow-glow);
+    color: var(--yellow);
+}
+
+/* Review Session Complete */
+.review-session-complete {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 32px 24px;
+    text-align: center;
+}
+
 /* ================================
    UTILITIES
    ================================ */

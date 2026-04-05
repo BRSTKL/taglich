@@ -175,12 +175,6 @@
     }
 
     function updatePronunciationUI() {
-        const button = document.getElementById('btn-pronounce');
-        const buttonLabel = document.getElementById('btn-pronounce-label');
-        const note = document.getElementById('pronounce-note');
-
-        if (!button || !buttonLabel || !note) return;
-
         const localActive = localPronunciationSupported && !piperTtsDisabled;
         const localBusy = piperTtsState.status === 'loading-runtime' || piperTtsState.status === 'downloading-model';
         const localSpeaking = piperTtsState.status === 'speaking';
@@ -189,30 +183,39 @@
         const hasPhrase = !!currentLearnPhrase;
         const canPlay = localActive || fallbackAvailable;
 
-        button.disabled = !hasPhrase || !canPlay || localBusy;
-        button.classList.toggle('is-playing', isPlaying);
-        buttonLabel.textContent = isPlaying ? 'Çalıyor...' : 'Dinle';
-        button.setAttribute('aria-label', isPlaying ? 'Almanca telaffuz okunuyor' : 'Almanca telaffuzu dinle');
-
         let noteText = '';
         if (pronunciationError) {
             noteText = pronunciationError;
         } else if (piperTtsState.message) {
             noteText = piperTtsState.message;
-        } else if (localActive) {
-            noteText = '';
-        } else if (!speechSupported) {
+        } else if (!localActive && !speechSupported) {
             noteText = 'Tarayıcın sesli telaffuzu desteklemiyor.';
-        } else if (!availableVoices.length) {
+        } else if (!localActive && !availableVoices.length) {
             noteText = 'Sesler hazırlanıyor...';
-        } else if (!selectedVoice) {
+        } else if (!localActive && !selectedVoice) {
             noteText = 'Bu cihazda uygun ses bulunamadı.';
-        } else if (usingVoiceFallback) {
+        } else if (!localActive && usingVoiceFallback) {
             noteText = 'Almanca ses bulunamadı, cihazın varsayılan sesi kullanılacak.';
         }
 
-        note.textContent = noteText;
-        note.classList.toggle('hidden', !noteText);
+        const targets = [
+            ['btn-pronounce', 'btn-pronounce-label', 'pronounce-note'],
+            ['btn-review-pronounce', 'btn-review-pronounce-label', 'review-pronounce-note']
+        ];
+
+        for (const [btnId, labelId, noteId] of targets) {
+            const button = document.getElementById(btnId);
+            const label = document.getElementById(labelId);
+            const noteEl = document.getElementById(noteId);
+            if (!button || !label || !noteEl) continue;
+
+            button.disabled = !hasPhrase || !canPlay || localBusy;
+            button.classList.toggle('is-playing', isPlaying);
+            label.textContent = isPlaying ? 'Çalıyor...' : 'Dinle';
+            button.setAttribute('aria-label', isPlaying ? 'Almanca telaffuz okunuyor' : 'Almanca telaffuzu dinle');
+            noteEl.textContent = noteText;
+            noteEl.classList.toggle('hidden', !noteText);
+        }
     }
 
     function refreshPronunciationVoices() {
@@ -398,6 +401,15 @@
         if (id !== 'lesson') {
             currentLearnPhrase = null;
             stopPronunciation();
+        }
+
+        // Reset review session when navigating away from review
+        if (id !== 'review' && reviewSession.phrases.length > 0) {
+            reviewSession = { phrases: [], index: 0, correct: 0 };
+            const sessionEl = document.getElementById('review-session');
+            const bodyEl = document.getElementById('review-body');
+            if (sessionEl) sessionEl.classList.add('hidden');
+            if (bodyEl) bodyEl.classList.remove('hidden');
         }
 
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -733,25 +745,33 @@
     }
 
     // === REVIEW SCREEN ===
-    function renderReview() {
+    function getReviewPhrases() {
         const t = today();
-        const reviewPhrases = [];
-
+        const phrases = [];
         for (const [id, data] of Object.entries(state.phrases)) {
             if (data.nextReview <= t) {
                 const phrase = PHRASES_DB.find(p => p.id == id);
-                if (phrase) reviewPhrases.push({ ...phrase, ...data });
+                if (phrase) phrases.push({ ...phrase, ...data });
             }
         }
+        return phrases;
+    }
 
+    function renderReview() {
+        const reviewPhrases = getReviewPhrases();
         const emptyEl = document.getElementById('review-empty');
+        const startBarEl = document.getElementById('review-start-bar');
         const listEl = document.getElementById('review-list');
 
         if (reviewPhrases.length === 0) {
             emptyEl.classList.remove('hidden');
+            startBarEl.classList.add('hidden');
             listEl.innerHTML = '';
         } else {
             emptyEl.classList.add('hidden');
+            startBarEl.classList.remove('hidden');
+            document.getElementById('review-start-info').textContent =
+                `${reviewPhrases.length} kalıp tekrar bekliyor`;
             listEl.innerHTML = reviewPhrases.map(p => {
                 const levelClass = p.level === 'mastered' ? 'level-mastered' : p.level === 'learning' ? 'level-learning' : 'level-new';
                 const levelText = p.level === 'mastered' ? 'Usta' : p.level === 'learning' ? 'Öğreniyor' : 'Yeni';
@@ -766,6 +786,91 @@
                 `;
             }).join('');
         }
+    }
+
+    // === REVIEW SESSION ===
+    let reviewSession = { phrases: [], index: 0, correct: 0 };
+
+    function startReviewSession() {
+        const phrases = getReviewPhrases().map(p => ({ ...p }));
+        if (phrases.length === 0) return;
+
+        reviewSession = { phrases, index: 0, correct: 0 };
+
+        document.getElementById('review-body').classList.add('hidden');
+        const sessionEl = document.getElementById('review-session');
+        sessionEl.classList.remove('hidden');
+        document.getElementById('review-session-complete').classList.add('hidden');
+        document.getElementById('review-lesson-body').classList.remove('hidden');
+
+        showReviewCard();
+    }
+
+    function showReviewCard() {
+        if (reviewSession.index >= reviewSession.phrases.length) {
+            completeReview();
+            return;
+        }
+
+        stopPronunciation();
+
+        const phrase = reviewSession.phrases[reviewSession.index];
+        currentLearnPhrase = phrase;
+        pronunciationError = '';
+        updatePronunciationUI();
+
+        const progress = (reviewSession.index / reviewSession.phrases.length) * 100;
+        document.getElementById('review-progress-fill').style.width = progress + '%';
+        document.getElementById('review-counter').textContent =
+            `${reviewSession.index + 1}/${reviewSession.phrases.length}`;
+
+        document.getElementById('review-card-german').textContent = phrase.german;
+        document.getElementById('review-card-pronunciation').textContent = phrase.pronunciation;
+        document.getElementById('review-card-turkish').textContent = phrase.turkish;
+        document.getElementById('review-card-example').textContent = phrase.example;
+        document.getElementById('review-card-example-tr').textContent = phrase.exampleTr;
+
+        document.getElementById('review-card-back').classList.add('hidden');
+        document.getElementById('btn-review-reveal').classList.remove('hidden');
+        document.getElementById('review-card-actions').classList.add('hidden');
+
+        const card = document.getElementById('review-phrase-card');
+        card.style.animation = 'none';
+        card.offsetHeight;
+        card.style.animation = 'cardIn 0.4s ease-out';
+    }
+
+    function handleReviewReveal() {
+        document.getElementById('review-card-back').classList.remove('hidden');
+        document.getElementById('btn-review-reveal').classList.add('hidden');
+        document.getElementById('review-card-actions').classList.remove('hidden');
+    }
+
+    function handleReviewDifficulty(difficulty) {
+        const phrase = reviewSession.phrases[reviewSession.index];
+        updatePhraseState(phrase.id, difficulty);
+        if (difficulty !== 'hard') reviewSession.correct++;
+        reviewSession.index++;
+        showReviewCard();
+    }
+
+    function completeReview() {
+        stopPronunciation();
+        currentLearnPhrase = null;
+
+        document.getElementById('review-lesson-body').classList.add('hidden');
+        document.getElementById('review-session-complete').classList.remove('hidden');
+        document.getElementById('review-correct-count').textContent = reviewSession.correct;
+        document.getElementById('review-total-count').textContent = reviewSession.phrases.length;
+    }
+
+    function exitReviewSession() {
+        stopPronunciation();
+        currentLearnPhrase = null;
+        reviewSession = { phrases: [], index: 0, correct: 0 };
+        document.getElementById('review-session').classList.add('hidden');
+        document.getElementById('review-body').classList.remove('hidden');
+        renderReview();
     }
 
     // === KLOZ PUZZLE ===
@@ -1237,6 +1342,29 @@
         document.getElementById('btn-home').addEventListener('click', function() {
             showScreen('home');
         });
+
+        // Review session: start
+        document.getElementById('btn-review-start').addEventListener('click', startReviewSession);
+
+        // Review session: back button
+        document.getElementById('btn-review-back').addEventListener('click', exitReviewSession);
+
+        // Review session: reveal
+        document.getElementById('btn-review-reveal').addEventListener('click', handleReviewReveal);
+
+        // Review session: pronunciation
+        document.getElementById('btn-review-pronounce').addEventListener('click', function() {
+            if (!this.disabled) speakCurrentPhrase();
+        });
+
+        // Review session: difficulty buttons (use data-rdiff to distinguish from lesson)
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('[data-rdiff]');
+            if (btn) handleReviewDifficulty(btn.dataset.rdiff);
+        });
+
+        // Review session: done button
+        document.getElementById('btn-review-done').addEventListener('click', exitReviewSession);
     }
 
     // === SPLASH & INIT ===

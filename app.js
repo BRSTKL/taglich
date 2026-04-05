@@ -1072,63 +1072,105 @@
         if (!SpeechRecognition) return;
 
         const micBtn = document.getElementById('btn-shadow-mic');
-        if (micBtn) {
-            micBtn.textContent = '🎙 Dinleniyor...';
-            micBtn.disabled = true;
-        }
+        const resultEl = document.getElementById('shadow-result');
 
-        const recognition = new SpeechRecognition();
-        recognition.lang = 'de-DE';
-        recognition.interimResults = false;
-        recognition.maxAlternatives = 3;
-        shadowSession.recognition = recognition;
-
-        recognition.onresult = function(event) {
-            const transcripts = Array.from(event.results[0]).map(r => r.transcript);
-            handleShadowingResult(transcripts);
-        };
-        recognition.onerror = function() {
-            const resultEl = document.getElementById('shadow-result');
-            if (resultEl) {
-                resultEl.innerHTML = '<span class="shadow-score-low">Ses alınamadı. Tekrar dene.</span>';
-                resultEl.classList.remove('hidden');
+        // Geri sayım: 3… 2… 1… Konuş!
+        let count = 3;
+        function tick() {
+            if (micBtn) {
+                micBtn.innerHTML = `<span style="font-size:1.1rem;font-weight:700">${count}</span>`;
+                micBtn.disabled = true;
             }
-            if (micBtn) { micBtn.textContent = 'Tekrarla'; micBtn.disabled = false; }
-        };
-        recognition.onend = function() {
-            if (micBtn) { micBtn.textContent = 'Tekrarla'; micBtn.disabled = false; }
-        };
-        recognition.start();
+            if (count > 0) {
+                count--;
+                setTimeout(tick, 700);
+            } else {
+                if (micBtn) micBtn.innerHTML = '🔴 Konuşuyor...';
+                beginRecognition();
+            }
+        }
+        tick();
+
+        function beginRecognition() {
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'de-DE';
+            recognition.continuous = false;
+            recognition.interimResults = false;
+            recognition.maxAlternatives = 3;
+            shadowSession.recognition = recognition;
+
+            let gotResult = false;
+
+            recognition.onresult = function(event) {
+                gotResult = true;
+                const transcripts = Array.from(event.results[0]).map(r => r.transcript);
+                handleShadowingResult(transcripts);
+            };
+
+            recognition.onerror = function(e) {
+                gotResult = true; // prevent double message
+                if (micBtn) { micBtn.textContent = 'Tekrarla 🎙'; micBtn.disabled = false; }
+                if (!resultEl) return;
+                if (e.error === 'not-allowed') {
+                    resultEl.innerHTML = '<span class="shadow-score-low">🚫 Mikrofon izni reddedildi. Tarayıcı ayarlarından izin ver.</span>';
+                } else if (e.error === 'no-speech') {
+                    resultEl.innerHTML = '<span class="shadow-score-low">🤫 Ses algılanamadı. Mikrofona yakın konuş.</span>';
+                } else if (e.error === 'audio-capture') {
+                    resultEl.innerHTML = '<span class="shadow-score-low">🎙 Mikrofon bulunamadı.</span>';
+                } else if (e.error === 'network') {
+                    resultEl.innerHTML = '<span class="shadow-score-low">📶 Ağ hatası. İnternet bağlantını kontrol et.</span>';
+                } else {
+                    resultEl.innerHTML = '<span class="shadow-score-low">Ses alınamadı — tekrar dene.</span>';
+                }
+                resultEl.classList.remove('hidden');
+            };
+
+            recognition.onend = function() {
+                if (micBtn) { micBtn.textContent = 'Tekrarla 🎙'; micBtn.disabled = false; }
+                // onresult gelmeden bittiyse (sessizlik, timeout vs)
+                if (!gotResult) {
+                    if (resultEl) {
+                        resultEl.innerHTML = '<span class="shadow-score-low">🤫 Ses algılanamadı. Mikrofona yakın, biraz daha yüksek sesle konuş.</span>';
+                        resultEl.classList.remove('hidden');
+                    }
+                }
+            };
+
+            recognition.start();
+        }
     }
 
     function handleShadowingResult(transcripts) {
         const phrase = shadowSession.phrases[shadowSession.index];
         const target = normalizeGerman(phrase.german);
-        const bestMatch = transcripts
-            .map(t => ({ t, dist: levenshtein(normalizeGerman(t), target) }))
-            .reduce((best, cur) => cur.dist < best.dist ? cur : best);
 
-        const maxDist = Math.max(1, target.length * 0.3);
-        const score = Math.max(0, Math.round((1 - bestMatch.dist / target.length) * 100));
+        // En iyi eşleşmeyi bul
+        const scored = transcripts.map(t => {
+            const norm = normalizeGerman(t);
+            const dist = levenshtein(norm, target);
+            const maxLen = Math.max(norm.length, target.length);
+            const pct = maxLen === 0 ? 100 : Math.round((1 - dist / maxLen) * 100);
+            return { t, pct };
+        });
+        const best = scored.reduce((a, b) => b.pct > a.pct ? b : a);
 
         const resultEl = document.getElementById('shadow-result');
         const nextBtn = document.getElementById('btn-shadow-next');
         const skipBtn = document.getElementById('btn-shadow-skip');
 
-        let html = `<div class="shadow-heard">Duyulan: <em>"${bestMatch.t}"</em></div>`;
-        if (score >= 80) {
-            html += `<div class="shadow-score shadow-score-high">🎉 ${score}% — Mükemmel telaffuz!</div>`;
-        } else if (score >= 55) {
-            html += `<div class="shadow-score shadow-score-mid">👍 ${score}% — İyi gidiyorsun</div>`;
+        let html = `<div class="shadow-heard">Duyulan: <em>"${best.t}"</em></div>`;
+        if (best.pct >= 80) {
+            html += `<div class="shadow-score shadow-score-high">🎉 ${best.pct}% — Mükemmel telaffuz!</div>`;
+        } else if (best.pct >= 50) {
+            html += `<div class="shadow-score shadow-score-mid">👍 ${best.pct}% — İyi gidiyorsun</div>`;
         } else {
-            html += `<div class="shadow-score shadow-score-low">💪 ${score}% — Biraz daha pratik</div>`;
+            html += `<div class="shadow-score shadow-score-low">💪 ${best.pct}% — Biraz daha pratik</div>`;
         }
 
         if (resultEl) { resultEl.innerHTML = html; resultEl.classList.remove('hidden'); }
         if (nextBtn) { nextBtn.classList.remove('hidden'); }
         if (skipBtn) { skipBtn.classList.add('hidden'); }
 
-        // Next card on btn-shadow-next click
         if (nextBtn) {
             nextBtn.onclick = function() {
                 shadowSession.index++;

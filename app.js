@@ -105,19 +105,19 @@
     let state = loadState();
     if (stateWasMigrated) saveState();
 
-    // === PRONUNCIATION — Web Speech API ===
+    // === PRONUNCIATION — Neural TTS proxy + Web Speech yedek ===
     const speechSupported = 'speechSynthesis' in window && 'SpeechSynthesisUtterance' in window;
     const speechSynth = speechSupported ? window.speechSynthesis : null;
     let selectedVoice = null;
     let currentUtterance = null;
+    let currentAudio = null;
+    let ttsPlaying = false;
     let currentLearnPhrase = null;
     let pronunciationError = '';
 
     function updatePronunciationUI() {
-        const isPlaying = !!currentUtterance;
+        const isPlaying = ttsPlaying || !!currentUtterance;
         const hasPhrase = !!currentLearnPhrase;
-        const canPlay = speechSupported;
-
         const noteText = pronunciationError || '';
 
         const targets = [
@@ -131,7 +131,7 @@
             const noteEl = document.getElementById(noteId);
             if (!button || !label || !noteEl) continue;
 
-            button.disabled = !hasPhrase || !canPlay;
+            button.disabled = !hasPhrase;
             button.classList.toggle('is-playing', isPlaying);
             label.textContent = isPlaying ? 'Çalıyor...' : 'Dinle';
             button.setAttribute('aria-label', isPlaying ? 'Almanca telaffuz okunuyor' : 'Almanca telaffuzu dinle');
@@ -143,53 +143,72 @@
     function refreshPronunciationVoices() {
         if (!speechSupported) return;
         const voices = speechSynth.getVoices();
-        // de-DE sesini tercih et, yoksa herhangi bir de-* sesi, yoksa null
         selectedVoice =
             voices.find(v => v.lang.toLowerCase() === 'de-de') ||
             voices.find(v => v.lang.toLowerCase().startsWith('de')) ||
             null;
-        updatePronunciationUI();
     }
 
     function stopPronunciation() {
         pronunciationError = '';
+        if (currentAudio) {
+            currentAudio.pause();
+            currentAudio.src = '';
+            currentAudio = null;
+        }
+        ttsPlaying = false;
         currentUtterance = null;
         if (speechSupported) speechSynth.cancel();
         updatePronunciationUI();
     }
 
-    function speakCurrentPhrase() {
-        if (!speechSupported || !currentLearnPhrase) return;
-
-        pronunciationError = '';
-        stopPronunciation();
-
-        const utterance = new SpeechSynthesisUtterance(currentLearnPhrase.german);
+    function speakWithWebSpeech(text) {
+        if (!speechSupported) return;
+        const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'de-DE';
         if (selectedVoice) utterance.voice = selectedVoice;
         utterance.rate = 0.92;
-        utterance.pitch = 1;
-
         currentUtterance = utterance;
         updatePronunciationUI();
-
         utterance.onend = function() {
-            if (currentUtterance === utterance) {
-                currentUtterance = null;
-                updatePronunciationUI();
-            }
+            if (currentUtterance === utterance) { currentUtterance = null; updatePronunciationUI(); }
         };
-
         utterance.onerror = function(e) {
             if (e.error === 'interrupted' || e.error === 'canceled') return;
-            if (currentUtterance === utterance) {
-                currentUtterance = null;
-                pronunciationError = 'Ses çalınamadı.';
-                updatePronunciationUI();
-            }
+            if (currentUtterance === utterance) { currentUtterance = null; updatePronunciationUI(); }
         };
-
         speechSynth.speak(utterance);
+    }
+
+    function speakCurrentPhrase() {
+        if (!currentLearnPhrase) return;
+        pronunciationError = '';
+        stopPronunciation();
+
+        const text = currentLearnPhrase.german;
+        const url = '/api/tts?q=' + encodeURIComponent(text) + '&lang=de';
+        const audio = new Audio();
+        currentAudio = audio;
+
+        audio.addEventListener('playing', function() {
+            ttsPlaying = true;
+            updatePronunciationUI();
+        });
+        audio.addEventListener('ended', function() {
+            if (currentAudio === audio) { currentAudio = null; ttsPlaying = false; }
+            updatePronunciationUI();
+        });
+        audio.addEventListener('error', function() {
+            if (currentAudio === audio) { currentAudio = null; ttsPlaying = false; }
+            speakWithWebSpeech(text);
+        });
+
+        audio.src = url;
+        audio.play().catch(function() {
+            if (currentAudio === audio) { currentAudio = null; ttsPlaying = false; }
+            speakWithWebSpeech(text);
+        });
+        updatePronunciationUI();
     }
 
     function initPronunciation() {

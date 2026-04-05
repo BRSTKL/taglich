@@ -304,15 +304,6 @@
         pronunciationError = '';
         stopPronunciation();
 
-        // 1. Google TTS dene (daha iyi kalite, neural ses)
-        try {
-            await speakWithGoogleTTS(currentLearnPhrase.german);
-            return;
-        } catch (_) {
-            // Bloke veya hata → Web Speech'e geç
-        }
-
-        // 2. Web Speech API — her modern tarayıcıda çalışır
         if (speechSupported) {
             speakWithSpeechSynthesis();
             return;

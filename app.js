@@ -117,8 +117,10 @@
     let pronunciationError = '';
     let piperTtsController = null;
     let piperTtsModulePromise = null;
-    let piperTtsDisabled = false;
+    let piperTtsDisabled = true; // Piper devre dışı — Google TTS birincil
     let piperTtsState = { status: 'idle', message: '' };
+    let currentAudio = null; // Google TTS audio element
+    let googleTtsPlaying = false;
 
     function pickPronunciationVoice(voices) {
         const usableVoices = voices.filter(Boolean);
@@ -179,23 +181,16 @@
         const localBusy = piperTtsState.status === 'loading-runtime' || piperTtsState.status === 'downloading-model';
         const localSpeaking = piperTtsState.status === 'speaking';
         const fallbackAvailable = speechSupported && !!selectedVoice;
-        const isPlaying = localSpeaking || !!currentUtterance;
+        const googleTtsAvailable = typeof Audio !== 'undefined';
+        const isPlaying = localSpeaking || !!currentUtterance || googleTtsPlaying;
         const hasPhrase = !!currentLearnPhrase;
-        const canPlay = localActive || fallbackAvailable;
+        const canPlay = localActive || fallbackAvailable || googleTtsAvailable;
 
         let noteText = '';
         if (pronunciationError) {
             noteText = pronunciationError;
-        } else if (piperTtsState.message) {
-            noteText = piperTtsState.message;
-        } else if (!localActive && !speechSupported) {
+        } else if (!googleTtsAvailable && !speechSupported) {
             noteText = 'Tarayıcın sesli telaffuzu desteklemiyor.';
-        } else if (!localActive && !availableVoices.length) {
-            noteText = 'Sesler hazırlanıyor...';
-        } else if (!localActive && !selectedVoice) {
-            noteText = 'Bu cihazda uygun ses bulunamadı.';
-        } else if (!localActive && usingVoiceFallback) {
-            noteText = 'Almanca ses bulunamadı, cihazın varsayılan sesi kullanılacak.';
         }
 
         const targets = [
@@ -234,18 +229,24 @@
     function stopPronunciation() {
         pronunciationError = '';
 
+        // Stop Google TTS
+        if (currentAudio) {
+            currentAudio.pause();
+            currentAudio.src = '';
+            currentAudio = null;
+        }
+        googleTtsPlaying = false;
+
+        // Stop Piper (if ever used)
         setPiperTtsState(piperTtsController ? 'ready' : 'idle');
         if (piperTtsController) {
             piperTtsController.stop();
         }
 
-        if (!speechSupported) {
-            updatePronunciationUI();
-            return;
-        }
-
+        // Stop Web Speech
         currentUtterance = null;
-        speechSynth.cancel();
+        if (speechSupported) speechSynth.cancel();
+
         updatePronunciationUI();
     }
 
@@ -303,33 +304,74 @@
         pronunciationError = '';
         stopPronunciation();
 
-        if (localPronunciationSupported && !piperTtsDisabled) {
-            try {
-                const controller = await getPiperTtsController();
-                if (controller) {
-                    await controller.speak(currentLearnPhrase.german);
-                    return;
-                }
-            } catch (error) {
-                if (speechSupported && selectedVoice) {
-                    setPiperTtsState('fallback', 'Yuksek kaliteli ses kullanilamadi, cihaz sesi kullanilacak.');
-                    speakWithSpeechSynthesis();
-                    return;
-                }
-
-                pronunciationError = 'Yuksek kaliteli ses oynatilamadi. Tekrar dene.';
-                updatePronunciationUI();
-                return;
-            }
+        // 1. Google TTS — hızlı, yüksek kalite (Google Neural)
+        try {
+            await speakWithGoogleTTS(currentLearnPhrase.german);
+            return;
+        } catch (_) {
+            // Google TTS erişilemezse Web Speech'e geç
         }
 
+        // 2. Web Speech API yedek
         if (speechSupported && selectedVoice) {
             speakWithSpeechSynthesis();
             return;
         }
 
-        pronunciationError = 'Bu cihazda uygun bir ses motoru bulunamadi.';
+        pronunciationError = 'Ses oynatılamadı. İnternet bağlantını kontrol et.';
         updatePronunciationUI();
+    }
+
+    function speakWithGoogleTTS(text) {
+        return new Promise((resolve, reject) => {
+            const url = 'https://translate.google.com/translate_tts?ie=UTF-8' +
+                '&q=' + encodeURIComponent(text) +
+                '&tl=de&client=tw-ob&ttsspeed=0.9';
+
+            const audio = new Audio(url);
+            currentAudio = audio;
+            googleTtsPlaying = true;
+            updatePronunciationUI();
+
+            audio.oncanplaythrough = function() {
+                audio.play().catch(function() {
+                    currentAudio = null;
+                    googleTtsPlaying = false;
+                    updatePronunciationUI();
+                    reject(new Error('play blocked'));
+                });
+            };
+
+            audio.onended = function() {
+                if (currentAudio === audio) {
+                    currentAudio = null;
+                    googleTtsPlaying = false;
+                    updatePronunciationUI();
+                }
+                resolve();
+            };
+
+            audio.onerror = function() {
+                if (currentAudio === audio) {
+                    currentAudio = null;
+                    googleTtsPlaying = false;
+                    updatePronunciationUI();
+                }
+                reject(new Error('audio load error'));
+            };
+
+            // Timeout: 5 saniyede yüklenmediyse Web Speech'e geç
+            setTimeout(function() {
+                if (googleTtsPlaying && currentAudio === audio) {
+                    audio.onerror = null;
+                    audio.onended = null;
+                    currentAudio = null;
+                    googleTtsPlaying = false;
+                    updatePronunciationUI();
+                    reject(new Error('timeout'));
+                }
+            }, 5000);
+        });
     }
 
     function initPronunciation() {

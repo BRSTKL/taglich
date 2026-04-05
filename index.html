@@ -104,20 +104,24 @@
             <!-- Bottom Nav -->
             <nav class="bottom-nav">
                 <button class="nav-btn active" data-screen="home">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
                     <span>Ana Sayfa</span>
                 </button>
                 <button class="nav-btn" data-screen="progress">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
                     <span>İlerleme</span>
                 </button>
                 <button class="nav-btn" data-screen="review">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 4v16"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 4v16"/></svg>
                     <span>Tekrar</span>
                 </button>
                 <button class="nav-btn" data-screen="kloz">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
                     <span>Kloz</span>
+                </button>
+                <button class="nav-btn" data-screen="shadow">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                    <span>Gölge</span>
                 </button>
             </nav>
         </div>
@@ -161,6 +165,17 @@
                             <p class="card-example-tr" id="card-example-tr"></p>
                         </div>
                         <button class="btn-reveal" id="btn-reveal">Anlamını Göster</button>
+                        <div class="confidence-choice hidden" id="confidence-choice">
+                            <p class="confidence-label">Almancasını biliyor muydun?</p>
+                            <div class="confidence-btns">
+                                <button class="btn-confident" id="btn-confident">Biliyorum 💪</button>
+                                <button class="btn-hint" id="btn-hint">İpucu ver 💡</button>
+                            </div>
+                        </div>
+                        <div class="socratic-hint-area hidden" id="socratic-hint-area">
+                            <p class="hint-text" id="socratic-hint-text"></p>
+                            <button class="btn-reveal btn-reveal-after-hint" id="btn-reveal-after-hint">Anlamını Göster →</button>
+                        </div>
                         <div class="card-actions hidden" id="card-actions">
                             <button class="btn-difficulty btn-hard" data-difficulty="hard">Zor 😤</button>
                             <button class="btn-difficulty btn-okay" data-difficulty="okay">Tamam 🤔</button>
@@ -225,23 +240,32 @@
                     <h3>Tamamlanan Günler</h3>
                     <div class="day-grid" id="day-grid"></div>
                 </div>
+                <div class="cat-stats-section">
+                    <h3>Kategori Raporu</h3>
+                    <div class="cat-stats-body" id="cat-stats-body"></div>
+                    <p class="cat-recommendation hidden" id="cat-recommendation"></p>
+                </div>
             </div>
             <nav class="bottom-nav">
                 <button class="nav-btn" data-screen="home">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
                     <span>Ana Sayfa</span>
                 </button>
                 <button class="nav-btn active" data-screen="progress">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
                     <span>İlerleme</span>
                 </button>
                 <button class="nav-btn" data-screen="review">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 4v16"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 4v16"/></svg>
                     <span>Tekrar</span>
                 </button>
                 <button class="nav-btn" data-screen="kloz">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
                     <span>Kloz</span>
+                </button>
+                <button class="nav-btn" data-screen="shadow">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                    <span>Gölge</span>
                 </button>
             </nav>
         </div>
@@ -303,6 +327,17 @@
                                 <p class="card-example-tr" id="review-card-example-tr"></p>
                             </div>
                             <button class="btn-reveal" id="btn-review-reveal">Anlamını Göster</button>
+                            <div class="review-bicim-area hidden" id="review-bicim-area">
+                                <p class="review-mode-label">🎧 Dinlediniz. Almancasını yazın:</p>
+                                <input type="text" class="review-bicim-input" id="review-bicim-input" placeholder="Almanca cümleyi yazın..." autocomplete="off">
+                                <button class="btn-reveal" id="btn-bicim-check">Kontrol Et</button>
+                                <div class="review-bicim-result hidden" id="review-bicim-result"></div>
+                            </div>
+                            <div class="review-kullanim-area hidden" id="review-kullanim-area">
+                                <p class="review-mode-label">🌍 Türkçe bağlamı okuyun:</p>
+                                <p class="review-kullanim-context" id="review-kullanim-context"></p>
+                                <div class="review-kullanim-options" id="review-kullanim-options"></div>
+                            </div>
                             <div class="card-actions hidden" id="review-card-actions">
                                 <button class="btn-difficulty btn-hard" data-rdiff="hard">Zor 😤</button>
                                 <button class="btn-difficulty btn-okay" data-rdiff="okay">Tamam 🤔</button>
@@ -333,20 +368,54 @@
 
             <nav class="bottom-nav">
                 <button class="nav-btn" data-screen="home">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
                     <span>Ana Sayfa</span>
                 </button>
                 <button class="nav-btn" data-screen="progress">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
                     <span>İlerleme</span>
                 </button>
                 <button class="nav-btn active" data-screen="review">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 4v16"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 4v16"/></svg>
                     <span>Tekrar</span>
                 </button>
                 <button class="nav-btn" data-screen="kloz">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
                     <span>Kloz</span>
+                </button>
+                <button class="nav-btn" data-screen="shadow">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                    <span>Gölge</span>
+                </button>
+            </nav>
+        </div>
+
+        <!-- Shadowing Screen -->
+        <div id="shadow-screen" class="screen">
+            <header class="page-header">
+                <h2>Gölgeleme</h2>
+            </header>
+            <div class="shadow-body" id="shadow-body"></div>
+            <nav class="bottom-nav">
+                <button class="nav-btn" data-screen="home">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                    <span>Ana Sayfa</span>
+                </button>
+                <button class="nav-btn" data-screen="progress">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                    <span>İlerleme</span>
+                </button>
+                <button class="nav-btn" data-screen="review">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 4v16"/></svg>
+                    <span>Tekrar</span>
+                </button>
+                <button class="nav-btn" data-screen="kloz">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                    <span>Kloz</span>
+                </button>
+                <button class="nav-btn active" data-screen="shadow">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                    <span>Gölge</span>
                 </button>
             </nav>
         </div>
@@ -356,20 +425,24 @@
             <div class="kloz-body" id="kloz-body"></div>
             <nav class="bottom-nav">
                 <button class="nav-btn" data-screen="home">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/></svg>
                     <span>Ana Sayfa</span>
                 </button>
                 <button class="nav-btn" data-screen="progress">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
                     <span>İlerleme</span>
                 </button>
                 <button class="nav-btn" data-screen="review">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 4v16"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4z"/><path d="M4 10h16M10 4v16"/></svg>
                     <span>Tekrar</span>
                 </button>
                 <button class="nav-btn active" data-screen="kloz">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
                     <span>Kloz</span>
+                </button>
+                <button class="nav-btn" data-screen="shadow">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                    <span>Gölge</span>
                 </button>
             </nav>
         </div>

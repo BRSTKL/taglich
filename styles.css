@@ -1582,3 +1582,469 @@ body {
 
 .kloz-compl-word.ok  { color: var(--green); }
 .kloz-compl-word.fail { color: var(--red); }
+
+/* ================================
+   FEATURE 1: KATEGORİ ANALİTİKLERİ
+   ================================ */
+.cat-stats-section {
+    padding: 20px 20px 8px;
+}
+
+.cat-stats-section h3 {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    margin-bottom: 14px;
+}
+
+.cat-stats-body {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.cat-stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    transition: border-color 0.2s;
+}
+
+.cat-stat-card.cat-stat-weak {
+    border-color: rgba(255, 90, 90, 0.4);
+    background: rgba(255, 90, 90, 0.04);
+}
+
+.cat-stat-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.cat-stat-emoji { font-size: 1rem; }
+
+.cat-stat-label {
+    flex: 1;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text);
+}
+
+.cat-stat-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 20px;
+}
+
+.cat-badge-ok  { background: rgba(80,220,100,0.15); color: var(--green); }
+.cat-badge-medium { background: rgba(255,200,60,0.15); color: var(--yellow); }
+.cat-badge-hard { background: rgba(255,80,80,0.15); color: var(--red); }
+
+.cat-stat-bar-bg {
+    height: 5px;
+    background: var(--bg-elevated);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 6px;
+}
+
+.cat-stat-bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 3px;
+    transition: width 0.6s ease;
+}
+
+.cat-stat-meta {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+}
+
+.cat-weak-tag {
+    color: var(--red);
+    font-weight: 600;
+}
+
+.cat-recommendation {
+    margin-top: 12px;
+    padding: 10px 14px;
+    background: rgba(99,102,241,0.1);
+    border: 1px solid rgba(99,102,241,0.25);
+    border-radius: var(--radius-sm);
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.cat-recommendation strong { color: var(--text); }
+
+.cat-empty {
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    text-align: center;
+    padding: 16px 0;
+}
+
+/* ================================
+   FEATURE 2: GÜVEN ÖLÇER + SOKRATIK İPUCU
+   ================================ */
+.confidence-choice {
+    padding: 16px 4px 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.confidence-label {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.confidence-btns {
+    display: flex;
+    gap: 10px;
+}
+
+.btn-confident, .btn-hint {
+    flex: 1;
+    padding: 12px 8px;
+    border-radius: var(--radius-sm);
+    border: none;
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-confident {
+    background: rgba(80,220,100,0.15);
+    color: var(--green);
+    border: 1px solid rgba(80,220,100,0.3);
+}
+.btn-confident:active { transform: scale(0.97); }
+
+.btn-hint {
+    background: rgba(255,200,60,0.12);
+    color: var(--yellow);
+    border: 1px solid rgba(255,200,60,0.3);
+}
+.btn-hint:active { transform: scale(0.97); }
+
+.socratic-hint-area {
+    padding: 12px 4px 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.hint-text {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-style: italic;
+    background: var(--bg-elevated);
+    border-left: 3px solid var(--accent);
+    padding: 10px 12px;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    line-height: 1.5;
+}
+
+.btn-reveal-after-hint {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.88rem;
+}
+
+/* ================================
+   FEATURE 3: ISR ÜÇ KATMANLI
+   ================================ */
+.review-badge-form {
+    background: rgba(99,102,241,0.15);
+    color: var(--accent-light);
+}
+
+.review-badge-usage {
+    background: rgba(80,220,100,0.15);
+    color: var(--green);
+}
+
+.review-bicim-area {
+    padding: 12px 4px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.review-mode-label {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.review-bicim-input {
+    width: 100%;
+    padding: 12px 14px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 0.95rem;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+.review-bicim-input:focus { border-color: var(--accent); }
+
+.review-bicim-result {
+    font-size: 0.85rem;
+    padding: 8px 12px;
+    background: var(--bg-elevated);
+    border-radius: var(--radius-sm);
+    line-height: 1.5;
+}
+
+.bicim-ok  { color: var(--green); font-weight: 700; }
+.bicim-close { color: var(--yellow); font-weight: 700; }
+.bicim-wrong { color: var(--red); font-weight: 700; }
+
+.review-kullanim-area {
+    padding: 12px 4px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.review-kullanim-context {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-style: italic;
+    background: var(--bg-elevated);
+    border-left: 3px solid var(--green);
+    padding: 10px 12px;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.review-kullanim-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.kullanim-option {
+    width: 100%;
+    padding: 11px 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 0.88rem;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.2s;
+    line-height: 1.4;
+}
+
+.kullanim-option:not(:disabled):hover { border-color: var(--accent); color: var(--accent-light); }
+.kullanim-option:disabled { cursor: default; }
+.kullanim-option.kullanim-correct { border-color: var(--green); background: rgba(80,220,100,0.1); color: var(--green); }
+.kullanim-option.kullanim-wrong-sel { border-color: var(--red); background: rgba(255,80,80,0.08); color: var(--red); }
+
+/* ================================
+   FEATURE 4: GÖLGELEME MODU
+   ================================ */
+.shadow-body {
+    flex: 1;
+    overflow-y: auto;
+    padding-bottom: 20px;
+}
+
+.shadow-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 32px;
+    text-align: center;
+    gap: 12px;
+}
+
+.shadow-empty-icon { font-size: 3rem; }
+
+.shadow-empty h3 {
+    font-family: var(--font-display);
+    font-size: 1.2rem;
+}
+
+.shadow-empty p { font-size: 0.85rem; color: var(--text-muted); }
+
+.shadow-intro {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 32px 32px;
+    text-align: center;
+    gap: 14px;
+}
+
+.shadow-intro-icon { font-size: 3rem; }
+
+.shadow-intro h3 {
+    font-family: var(--font-display);
+    font-size: 1.3rem;
+}
+
+.shadow-intro p { font-size: 0.88rem; color: var(--text-muted); line-height: 1.55; }
+
+.shadow-start-btn { width: 100%; max-width: 280px; }
+
+.shadow-card {
+    padding: 24px 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.shadow-card-counter {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    text-align: center;
+    margin-bottom: 4px;
+}
+
+.shadow-card-german {
+    font-family: var(--font-display);
+    font-size: 1.45rem;
+    color: var(--text);
+    text-align: center;
+    line-height: 1.35;
+}
+
+.shadow-card-pronunciation {
+    font-size: 0.8rem;
+    color: var(--text-dim);
+    text-align: center;
+    font-style: italic;
+}
+
+.shadow-card-turkish {
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: 4px;
+}
+
+.shadow-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.btn-shadow-speak {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 12px 16px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn-shadow-speak:hover { border-color: var(--accent); color: var(--accent-light); }
+
+.btn-shadow-mic {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 12px 16px;
+    background: rgba(99,102,241,0.12);
+    border: 1px solid rgba(99,102,241,0.3);
+    border-radius: var(--radius-sm);
+    color: var(--accent-light);
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn-shadow-mic:disabled { opacity: 0.6; cursor: default; }
+.btn-shadow-mic:not(:disabled):hover { background: rgba(99,102,241,0.2); }
+
+.shadow-no-mic {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 8px 0;
+}
+
+.shadow-result {
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: var(--bg-card);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.shadow-heard {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+}
+.shadow-heard em { color: var(--text); font-style: normal; }
+
+.shadow-score {
+    font-size: 0.95rem;
+    font-weight: 700;
+}
+.shadow-score-high { color: var(--green); }
+.shadow-score-mid  { color: var(--yellow); }
+.shadow-score-low  { color: var(--red); }
+
+.shadow-nav {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.btn-shadow-skip,
+.btn-shadow-next {
+    flex: 1;
+    padding: 12px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+.btn-shadow-next {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    font-weight: 600;
+}
+.btn-shadow-skip:hover { border-color: var(--text-muted); color: var(--text); }
+.btn-shadow-next:hover { background: var(--accent-light); }

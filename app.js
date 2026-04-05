@@ -425,10 +425,17 @@
         if (id === 'progress') renderProgress();
         if (id === 'review') renderReview();
         if (id === 'kloz') renderPuzzleScreen();
+        if (id === 'shadow') renderShadowing();
 
         // Reset active cloze session when navigating away
         if (id !== 'kloz' && clozeSession.active) {
             clozeSession = { active: false, cards: [], currentIndex: 0, results: [], answered: false };
+        }
+
+        // Stop speech recognition when navigating away from shadow
+        if (id !== 'shadow' && shadowSession.recognition) {
+            try { shadowSession.recognition.abort(); } catch(e) {}
+            shadowSession.recognition = null;
         }
     }
 
@@ -481,6 +488,7 @@
     let lessonPhrases = [];
     let lessonIndex = 0;
     let lessonCorrect = 0;
+    let lessonConfidentBonus = false;
 
     function startLesson() {
         const dayNum = state.currentDay;
@@ -536,6 +544,9 @@
         document.getElementById('card-back').classList.add('hidden');
         document.getElementById('btn-reveal').classList.remove('hidden');
         document.getElementById('card-actions').classList.add('hidden');
+        document.getElementById('confidence-choice').classList.add('hidden');
+        document.getElementById('socratic-hint-area').classList.add('hidden');
+        lessonConfidentBonus = false;
 
         // Re-trigger animation
         const card = document.getElementById('phrase-card');
@@ -623,14 +634,38 @@
     }
 
     function handleReveal() {
-        document.getElementById('card-back').classList.remove('hidden');
+        // Show confidence choice instead of immediate reveal
         document.getElementById('btn-reveal').classList.add('hidden');
+        document.getElementById('confidence-choice').classList.remove('hidden');
+    }
+
+    function doReveal(isConfident) {
+        lessonConfidentBonus = isConfident;
+        document.getElementById('confidence-choice').classList.add('hidden');
+        document.getElementById('socratic-hint-area').classList.add('hidden');
+        document.getElementById('card-back').classList.remove('hidden');
         document.getElementById('card-actions').classList.remove('hidden');
+    }
+
+    function showSocraticHint() {
+        const phrase = lessonPhrases[lessonIndex];
+        const hints = {
+            'günlük': 'Bu cümlede kibarlık seviyesi önemli — "Sie" mi, "du" mu kullanılıyor?',
+            'iş': 'Bu ifade ne tür bir iş bağlamında geçer — teklif mi, talep mi, onay mı?',
+            'seyahat': 'Bu cümle nerede söylenir — havalimanı mı, otel mi, taşıma mı?',
+            'resmi': 'Neden bu resmi yapı günlük konuşmadan farklıdır?',
+            'sosyal': 'Konuşmacının tonu nasıl — içten mi, şakacı mı, resmi mi?'
+        };
+        const hint = (phrase && hints[phrase.category]) || 'Bu cümleyi hangi bağlamda duymuş olabilirsin?';
+        document.getElementById('socratic-hint-text').textContent = hint;
+        document.getElementById('confidence-choice').classList.add('hidden');
+        document.getElementById('socratic-hint-area').classList.remove('hidden');
     }
 
     function handleDifficulty(difficulty) {
         const phrase = lessonPhrases[lessonIndex];
-        updatePhraseState(phrase.id, difficulty);
+        updatePhraseState(phrase.id, difficulty, lessonConfidentBonus);
+        lessonConfidentBonus = false;
         state.totalAttempts++;
         if (difficulty !== 'hard') state.totalCorrect++;
         saveState();
@@ -640,7 +675,7 @@
     }
 
     // === SPACED REPETITION ===
-    function updatePhraseState(phraseId, difficulty) {
+    function updatePhraseState(phraseId, difficulty, confidenceBonus = false) {
         const qualityMap = {
             hard: 1,
             okay: 3,
@@ -675,6 +710,11 @@
                 previousEaseFactor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
             );
             p.repetitions++;
+        }
+
+        // Confidence bonus: small ease boost when user was confident + rated easy
+        if (confidenceBonus && quality >= 4) {
+            p.easeFactor = Math.min(3.5, p.easeFactor + 0.1);
         }
 
         p.level = p.repetitions === 0 ? 'new' : p.repetitions < 3 ? 'learning' : 'mastered';
@@ -742,6 +782,64 @@
             html += `<div class="${cls}">${d}</div>`;
         }
         grid.innerHTML = html;
+
+        // Category analytics
+        const catStats = buildCategoryStats();
+        const catBody = document.getElementById('cat-stats-body');
+        if (catBody) {
+            const anyLearned = catStats.some(s => s.learned > 0);
+            if (!anyLearned) {
+                catBody.innerHTML = '<p class="cat-empty">Henüz öğrenilen kelime yok. Derslere başla!</p>';
+            } else {
+                const weakest = catStats.reduce((min, s) => s.avgEase < min.avgEase ? s : min, catStats[0]);
+                catBody.innerHTML = catStats.map(s => {
+                    const isWeak = s === weakest && s.learned > 0 && s.avgEase < 2.3;
+                    const badgeColor = s.avgEase < 1.8 ? 'cat-badge-hard' : s.avgEase < 2.2 ? 'cat-badge-medium' : 'cat-badge-ok';
+                    return `
+                        <div class="cat-stat-card${isWeak ? ' cat-stat-weak' : ''}">
+                            <div class="cat-stat-header">
+                                <span class="cat-stat-emoji">${s.emoji}</span>
+                                <span class="cat-stat-label">${s.label}</span>
+                                <span class="cat-stat-badge ${badgeColor}">${s.masteredPercent}%</span>
+                            </div>
+                            <div class="cat-stat-bar-bg"><div class="cat-stat-bar-fill" style="width:${s.masteredPercent}%"></div></div>
+                            <div class="cat-stat-meta">${s.mastered}/${s.total} ustalaşıldı${isWeak ? ' · <span class="cat-weak-tag">Zayıf Nokta ⚠️</span>' : ''}</div>
+                        </div>`;
+                }).join('');
+                const recEl = document.getElementById('cat-recommendation');
+                if (recEl && catStats.some(s => s.mastered > 0)) {
+                    recEl.innerHTML = `Bu hafta <strong>${weakest.label}</strong> kategorisine odaklan ${weakest.emoji}`;
+                    recEl.classList.remove('hidden');
+                }
+            }
+        }
+    }
+
+    function buildCategoryStats() {
+        const CATEGORIES = [
+            { key: 'günlük', label: 'Günlük', emoji: '🗣' },
+            { key: 'iş', label: 'İş & Kariyer', emoji: '💼' },
+            { key: 'seyahat', label: 'Seyahat', emoji: '✈️' },
+            { key: 'resmi', label: 'Resmi', emoji: '📝' },
+            { key: 'sosyal', label: 'Sosyal', emoji: '👥' }
+        ];
+        return CATEGORIES.map(cat => {
+            const catPhrases = PHRASES_DB.filter(p => p.category === cat.key);
+            const total = catPhrases.length;
+            let learned = 0, mastered = 0, totalEase = 0, easeCount = 0;
+            catPhrases.forEach(p => {
+                const ps = state.phrases[p.id];
+                if (ps) {
+                    if (ps.level !== 'new') learned++;
+                    if (ps.level === 'mastered') mastered++;
+                    totalEase += ps.easeFactor;
+                    easeCount++;
+                }
+            });
+            const avgEase = easeCount > 0 ? totalEase / easeCount : 2.5;
+            const masteredPercent = total > 0 ? Math.round((mastered / total) * 100) : 0;
+            return { ...cat, total, learned, mastered, masteredPercent, avgEase };
+        });
     }
 
     // === REVIEW SCREEN ===
@@ -806,6 +904,16 @@
         showReviewCard();
     }
 
+    // === ISR MODE SELECTION ===
+    function selectReviewMode(repetitions) {
+        if (repetitions <= 1) return 'meaning';
+        if (repetitions <= 3) return Math.random() < 0.5 ? 'meaning' : 'form';
+        const r = Math.random();
+        if (r < 0.34) return 'meaning';
+        if (r < 0.67) return 'form';
+        return 'usage';
+    }
+
     function showReviewCard() {
         if (reviewSession.index >= reviewSession.phrases.length) {
             completeReview();
@@ -817,22 +925,62 @@
         const phrase = reviewSession.phrases[reviewSession.index];
         currentLearnPhrase = phrase;
         pronunciationError = '';
-        updatePronunciationUI();
+
+        const mode = selectReviewMode(phrase.repetitions || 0);
+        reviewSession.currentMode = mode;
 
         const progress = (reviewSession.index / reviewSession.phrases.length) * 100;
         document.getElementById('review-progress-fill').style.width = progress + '%';
         document.getElementById('review-counter').textContent =
             `${reviewSession.index + 1}/${reviewSession.phrases.length}`;
 
+        // Populate card data
         document.getElementById('review-card-german').textContent = phrase.german;
         document.getElementById('review-card-pronunciation').textContent = phrase.pronunciation;
         document.getElementById('review-card-turkish').textContent = phrase.turkish;
         document.getElementById('review-card-example').textContent = phrase.example;
         document.getElementById('review-card-example-tr').textContent = phrase.exampleTr;
 
+        // Hide all areas first
         document.getElementById('review-card-back').classList.add('hidden');
-        document.getElementById('btn-review-reveal').classList.remove('hidden');
+        document.getElementById('btn-review-reveal').classList.add('hidden');
         document.getElementById('review-card-actions').classList.add('hidden');
+        document.getElementById('review-bicim-area').classList.add('hidden');
+        document.getElementById('review-kullanim-area').classList.add('hidden');
+        document.getElementById('review-bicim-result').classList.add('hidden');
+
+        const badge = document.getElementById('review-phrase-card').querySelector('.card-mode-badge');
+
+        if (mode === 'meaning') {
+            // Anlam: show German → guess Turkish (classic)
+            badge.textContent = 'Anlam';
+            badge.className = 'card-mode-badge review-badge';
+            document.getElementById('review-card-german').parentElement.classList.remove('hidden');
+            document.getElementById('btn-review-reveal').classList.remove('hidden');
+            updatePronunciationUI();
+        } else if (mode === 'form') {
+            // Biçim: hear TTS → type German
+            badge.textContent = 'Biçim 🎧';
+            badge.className = 'card-mode-badge review-badge-form';
+            // Hide German text (challenge is to write it after listening)
+            document.getElementById('review-card-german').textContent = '🎧 Dinleyin...';
+            document.getElementById('review-card-pronunciation').textContent = '';
+            document.getElementById('review-bicim-area').classList.remove('hidden');
+            document.getElementById('review-bicim-input').value = '';
+            updatePronunciationUI();
+            // Auto-play TTS
+            setTimeout(() => speakCurrentPhrase(), 300);
+        } else {
+            // Kullanım: read Turkish context → pick correct German phrase
+            badge.textContent = 'Kullanım 🌍';
+            badge.className = 'card-mode-badge review-badge-usage';
+            document.getElementById('review-card-german').textContent = '?';
+            document.getElementById('review-card-pronunciation').textContent = '';
+            document.getElementById('review-kullanim-area').classList.remove('hidden');
+            document.getElementById('review-kullanim-context').textContent = phrase.exampleTr;
+            renderKullanımOptions(phrase);
+            updatePronunciationUI();
+        }
 
         const card = document.getElementById('review-phrase-card');
         card.style.animation = 'none';
@@ -840,10 +988,91 @@
         card.style.animation = 'cardIn 0.4s ease-out';
     }
 
+    function renderKullanımOptions(correctPhrase) {
+        const wrong = PHRASES_DB.filter(p => p.id !== correctPhrase.id)
+            .sort(() => Math.random() - 0.5).slice(0, 3);
+        const options = [
+            { text: correctPhrase.german, quality: 5 },
+            ...wrong.map(p => ({ text: p.german, quality: 1 }))
+        ].sort(() => Math.random() - 0.5);
+
+        document.getElementById('review-kullanim-options').innerHTML = options.map(opt =>
+            `<button class="kullanim-option" data-uq="${opt.quality}">${opt.text}</button>`
+        ).join('');
+    }
+
     function handleReviewReveal() {
         document.getElementById('review-card-back').classList.remove('hidden');
         document.getElementById('btn-review-reveal').classList.add('hidden');
         document.getElementById('review-card-actions').classList.remove('hidden');
+    }
+
+    function handleReviewBicimCheck() {
+        const phrase = reviewSession.phrases[reviewSession.index];
+        const input = document.getElementById('review-bicim-input').value.trim();
+        const correct = phrase.german.trim();
+        const isClose = normalizeGerman(input) === normalizeGerman(correct);
+        const quality = isClose ? 5 : input.length > 3 && levenshtein(normalizeGerman(input), normalizeGerman(correct)) <= 3 ? 3 : 1;
+
+        const resultEl = document.getElementById('review-bicim-result');
+        resultEl.classList.remove('hidden');
+        if (quality >= 4) {
+            resultEl.innerHTML = `<span class="bicim-ok">✓ Doğru!</span> <em>${correct}</em>`;
+        } else if (quality === 3) {
+            resultEl.innerHTML = `<span class="bicim-close">≈ Yakın!</span> <em>${correct}</em>`;
+        } else {
+            resultEl.innerHTML = `<span class="bicim-wrong">✗ Yanlış.</span> <em>${correct}</em>`;
+        }
+        document.getElementById('btn-bicim-check').textContent = 'İleri →';
+        document.getElementById('btn-bicim-check').onclick = function() {
+            updatePhraseState(phrase.id, quality >= 4 ? 'easy' : quality === 3 ? 'okay' : 'hard');
+            if (quality >= 3) reviewSession.correct++;
+            reviewSession.index++;
+            showReviewCard();
+            this.onclick = null;
+            this.textContent = 'Kontrol Et';
+            document.getElementById('review-bicim-input').value = '';
+        };
+    }
+
+    function handleReviewKullanımSelect(quality) {
+        const phrase = reviewSession.phrases[reviewSession.index];
+        updatePhraseState(phrase.id, quality >= 4 ? 'easy' : 'hard');
+        if (quality >= 4) reviewSession.correct++;
+
+        // Flash feedback on options
+        const optionsEl = document.getElementById('review-kullanim-options');
+        optionsEl.querySelectorAll('.kullanim-option').forEach(btn => {
+            btn.disabled = true;
+            const bq = parseInt(btn.getAttribute('data-uq'));
+            if (bq >= 4) btn.classList.add('kullanim-correct');
+            else if (quality < 4 && bq < 4) btn.classList.add('kullanim-wrong-sel');
+        });
+
+        setTimeout(() => {
+            reviewSession.index++;
+            showReviewCard();
+        }, 800);
+    }
+
+    function normalizeGerman(str) {
+        return str.toLowerCase()
+            .replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+            .replace(/[.,!?;:]/g, '').trim();
+    }
+
+    function levenshtein(a, b) {
+        const dp = Array.from({ length: a.length + 1 }, (_, i) =>
+            Array.from({ length: b.length + 1 }, (_, j) => i === 0 ? j : j === 0 ? i : 0)
+        );
+        for (let i = 1; i <= a.length; i++) {
+            for (let j = 1; j <= b.length; j++) {
+                dp[i][j] = a[i-1] === b[j-1]
+                    ? dp[i-1][j-1]
+                    : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+            }
+        }
+        return dp[a.length][b.length];
     }
 
     function handleReviewDifficulty(difficulty) {
@@ -871,6 +1100,162 @@
         document.getElementById('review-session').classList.add('hidden');
         document.getElementById('review-body').classList.remove('hidden');
         renderReview();
+    }
+
+    // === SHADOWING MODE ===
+    let shadowSession = { phrases: [], index: 0, recognition: null };
+
+    function getShadowPhrases() {
+        return PHRASES_DB.filter(p => {
+            const ps = state.phrases[p.id];
+            return ps && ps.level !== 'new';
+        }).sort(() => Math.random() - 0.5);
+    }
+
+    function renderShadowing() {
+        const bodyEl = document.getElementById('shadow-body');
+        const phrases = getShadowPhrases();
+        if (phrases.length === 0) {
+            bodyEl.innerHTML = `
+                <div class="shadow-empty">
+                    <div class="shadow-empty-icon">🎙</div>
+                    <h3>Henüz öğrenilen cümle yok</h3>
+                    <p>Derslerini tamamla, sonra geri gel!</p>
+                </div>`;
+            return;
+        }
+        shadowSession = { phrases, index: 0, recognition: null };
+        bodyEl.innerHTML = `
+            <div class="shadow-intro">
+                <div class="shadow-intro-icon">🎙</div>
+                <h3>Gölgeleme Modu</h3>
+                <p>${phrases.length} öğrenilen cümle hazır. Almancayı dinle, tekrarla ve puanını gör!</p>
+                <button class="btn-start shadow-start-btn" id="btn-shadow-start-session">
+                    <span>Başla</span>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                </button>
+            </div>`;
+        document.getElementById('btn-shadow-start-session').addEventListener('click', showShadowingCard);
+    }
+
+    function showShadowingCard() {
+        if (shadowSession.index >= shadowSession.phrases.length) {
+            shadowSession.index = 0; // loop back
+        }
+        const phrase = shadowSession.phrases[shadowSession.index];
+        currentLearnPhrase = phrase;
+        pronunciationError = '';
+        updatePronunciationUI();
+
+        const hasSpeech = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
+        const micButton = hasSpeech
+            ? `<button class="btn-shadow-mic" id="btn-shadow-mic" title="Mikrofon ile tekrarla">
+                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                       <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                       <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                       <line x1="12" y1="19" x2="12" y2="23"/>
+                       <line x1="8" y1="23" x2="16" y2="23"/>
+                   </svg>
+                   Tekrarla
+               </button>`
+            : `<p class="shadow-no-mic">🚫 Mikrofon Chrome/Edge'de çalışır. Firefox desteklemiyor.</p>`;
+
+        document.getElementById('shadow-body').innerHTML = `
+            <div class="shadow-card">
+                <div class="shadow-card-counter">${shadowSession.index + 1} / ${shadowSession.phrases.length}</div>
+                <div class="shadow-card-german">${phrase.german}</div>
+                <div class="shadow-card-pronunciation">${phrase.pronunciation}</div>
+                <div class="shadow-card-turkish">${phrase.turkish}</div>
+                <div class="shadow-actions">
+                    <button class="btn-shadow-speak" id="btn-shadow-speak">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M11 5L6 9H3v6h3l5 4V5z"/>
+                            <path d="M15.5 8.5a5 5 0 010 7"/>
+                        </svg>
+                        Dinle
+                    </button>
+                    ${micButton}
+                </div>
+                <div class="shadow-result hidden" id="shadow-result"></div>
+                <div class="shadow-nav">
+                    <button class="btn-shadow-skip" id="btn-shadow-skip">Atla →</button>
+                    <button class="btn-shadow-next hidden" id="btn-shadow-next">İleri →</button>
+                </div>
+            </div>`;
+    }
+
+    function shadowSpeak() {
+        speakCurrentPhrase();
+    }
+
+    function startShadowingRecognition() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) return;
+
+        const micBtn = document.getElementById('btn-shadow-mic');
+        if (micBtn) {
+            micBtn.textContent = '🎙 Dinleniyor...';
+            micBtn.disabled = true;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'de-DE';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 3;
+        shadowSession.recognition = recognition;
+
+        recognition.onresult = function(event) {
+            const transcripts = Array.from(event.results[0]).map(r => r.transcript);
+            handleShadowingResult(transcripts);
+        };
+        recognition.onerror = function() {
+            const resultEl = document.getElementById('shadow-result');
+            if (resultEl) {
+                resultEl.innerHTML = '<span class="shadow-score-low">Ses alınamadı. Tekrar dene.</span>';
+                resultEl.classList.remove('hidden');
+            }
+            if (micBtn) { micBtn.textContent = 'Tekrarla'; micBtn.disabled = false; }
+        };
+        recognition.onend = function() {
+            if (micBtn) { micBtn.textContent = 'Tekrarla'; micBtn.disabled = false; }
+        };
+        recognition.start();
+    }
+
+    function handleShadowingResult(transcripts) {
+        const phrase = shadowSession.phrases[shadowSession.index];
+        const target = normalizeGerman(phrase.german);
+        const bestMatch = transcripts
+            .map(t => ({ t, dist: levenshtein(normalizeGerman(t), target) }))
+            .reduce((best, cur) => cur.dist < best.dist ? cur : best);
+
+        const maxDist = Math.max(1, target.length * 0.3);
+        const score = Math.max(0, Math.round((1 - bestMatch.dist / target.length) * 100));
+
+        const resultEl = document.getElementById('shadow-result');
+        const nextBtn = document.getElementById('btn-shadow-next');
+        const skipBtn = document.getElementById('btn-shadow-skip');
+
+        let html = `<div class="shadow-heard">Duyulan: <em>"${bestMatch.t}"</em></div>`;
+        if (score >= 80) {
+            html += `<div class="shadow-score shadow-score-high">🎉 ${score}% — Mükemmel telaffuz!</div>`;
+        } else if (score >= 55) {
+            html += `<div class="shadow-score shadow-score-mid">👍 ${score}% — İyi gidiyorsun</div>`;
+        } else {
+            html += `<div class="shadow-score shadow-score-low">💪 ${score}% — Biraz daha pratik</div>`;
+        }
+
+        if (resultEl) { resultEl.innerHTML = html; resultEl.classList.remove('hidden'); }
+        if (nextBtn) { nextBtn.classList.remove('hidden'); }
+        if (skipBtn) { skipBtn.classList.add('hidden'); }
+
+        // Next card on btn-shadow-next click
+        if (nextBtn) {
+            nextBtn.onclick = function() {
+                shadowSession.index++;
+                showShadowingCard();
+            };
+        }
     }
 
     // === KLOZ PUZZLE ===
@@ -1365,6 +1750,47 @@
 
         // Review session: done button
         document.getElementById('btn-review-done').addEventListener('click', exitReviewSession);
+
+        // Feature 2: Confidence choice
+        document.getElementById('btn-confident').addEventListener('click', function() {
+            doReveal(true);
+        });
+        document.getElementById('btn-hint').addEventListener('click', function() {
+            showSocraticHint();
+        });
+        document.getElementById('btn-reveal-after-hint').addEventListener('click', function() {
+            doReveal(false);
+        });
+
+        // Feature 3: ISR Biçim check
+        document.getElementById('btn-bicim-check').addEventListener('click', handleReviewBicimCheck);
+        document.getElementById('review-bicim-input').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') handleReviewBicimCheck();
+        });
+
+        // Feature 3: ISR Kullanım options (delegated)
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('[data-uq]');
+            if (btn) handleReviewKullanımSelect(parseInt(btn.getAttribute('data-uq')));
+        });
+
+        // Feature 4: Shadowing
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('#btn-shadow-speak');
+            if (btn) shadowSpeak();
+        });
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('#btn-shadow-mic');
+            if (btn) startShadowingRecognition();
+        });
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('#btn-shadow-next');
+            if (btn) showShadowingCard();
+        });
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('#btn-shadow-skip');
+            if (btn) showShadowingCard();
+        });
     }
 
     // === SPLASH & INIT ===
